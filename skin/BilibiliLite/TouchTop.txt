@@ -1,0 +1,25 @@
+			<Static Image='TouchMain.png' AlphaMode='1' Align='Top' LeftMargin='20' RightMargin='20' ImageLeft='3' ImageTop='674' ImageWidth='569' ImageHeight='41' Height='41' IsTitleBar='1' >		
+				<Layout Align='Left' Width='1' />
+				<Button Tooltip='$CMD_MAIN_MENU' CmdID='CMD_MAIN_MENU' Align='Left' Width='89' ImageLeft='0' ImageTop='0' ImageWidth='89' ImageHeight='40' />	
+				<Layout Align='Left' Width='10' />
+				<Label Align='Left' CmdID='CMD_FILE_TYPE_MESSAGE' AutoVisible='1' AutoSize='1' ColorX='334' ColorY='110' Width='1' FontName='#DEFAULT_UI_FONT' FontSize='13' HoriAlignment='1' VertAlignment='1' Text='' />
+				<Layout Align='Left' CmdID='CMD_FILE_TYPE_MESSAGE' AutoVisible='1' Width='10' />
+				<Image Align='Left' Image='Main.png' CmdID='CMD_FILE_TYPE_MESSAGE' AutoVisible='1' Width='3' ImageLeft='364' ImageTop='43' ImageWidth='3' ImageHeight='10' Alignment='5' />
+				<Layout Align='Left' CmdID='CMD_CAST_ADULT' AutoVisible='1' Width='5' />
+				<Image Align='Left' Image='Main.png' CmdID='CMD_CAST_ADULT' AutoVisible='1' Width='22' ImageLeft='730' ImageTop='421' ImageWidth='22' ImageHeight='22' Alignment='5' />
+				<Layout Align='Left' CmdID='CMD_CAST_TOUGH' AutoVisible='1' Width='5' />
+				<Image Align='Left' Image='Main.png' CmdID='CMD_CAST_TOUGH' AutoVisible='1' Width='26' ImageLeft='762' ImageTop='416' ImageWidth='26' ImageHeight='26' Alignment='5' />
+				<Layout Align='Left' Width='10' />
+				
+				<Layout Align='Right' Width='15' />
+				<Button Tooltip='$ID_APP_EXIT' CmdID='ID_APP_EXIT' Align='Right' Width='14' ImageLeft='260' ImageTop='45' ImageWidth='14' ImageHeight='13' />
+				<Layout Align='Right' Width='15' />
+				<Button Tooltip='$CMD_MAX_WINDOW' CmdID='CMD_MAX_WINDOW' Align='Right' Width='14' ImageLeft='65' ImageTop='45' ImageWidth='14' ImageHeight='13' />	
+				<Button Tooltip='$CMD_RESTORE_WINDOW' CmdID='CMD_RESTORE_WINDOW' Align='Right' Width='14' ImageLeft='130' ImageTop='45' ImageWidth='14' ImageHeight='13' />	
+				<Layout Align='Right' Width='15' />
+				<Button Tooltip='$CMD_MIN_WINDOW' CmdID='CMD_MIN_WINDOW' Align='Right' Width='14' ImageLeft='0' ImageTop='45' ImageWidth='14' ImageHeight='13' />	
+				<Layout Align='Right' Width='10' />				
+				
+				<Label Align='Client' CmdID='CMD_TITLE_MESSAGE' ColorX='334' ColorY='110' UsingScroll='1' ScrollDistance='1' ScrollInterval='50' FontName='#DEFAULT_UI_FONT' FontSize='13' VertAlignment='1' />				
+				
+			</Static>			

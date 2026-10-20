@@ -1,0 +1,27 @@
+<!-- Shared compact controls: previous, play/pause, next, time; speed, subtitles, mute, fullscreen. -->
+<Static Image='Main.png' Align='Bottom' Height='40' LeftMargin='10' RightMargin='10' ImageLeft='3' ImageTop='690' ImageWidth='306' ImageHeight='40' AltImageLeft='371' AltImageTop='690'>
+    <Button Align='Left' Tooltip='$BILIBILI_PREV' CmdID='ID_PROCESS_PREV' Width='41' ImageLeft='164' ImageTop='300' ImageWidth='41' ImageHeight='40' />
+    <Button Align='Left' Tooltip='$CMD_MEDIA_PLAY' CmdID='CMD_MEDIA_PLAY' Width='41' ImageLeft='0' ImageTop='259' ImageWidth='41' ImageHeight='40' />
+    <Button Align='Left' Tooltip='$CMD_MEDIA_PAUSE' CmdID='CMD_MEDIA_PAUSE' Width='41' ImageLeft='164' ImageTop='259' ImageWidth='41' ImageHeight='40' />
+    <Button Align='Left' Tooltip='$BILIBILI_NEXT' CmdID='ID_PROCESS_NEXT' Width='41' ImageLeft='328' ImageTop='300' ImageWidth='41' ImageHeight='40' />
+    <Layout Align='Left' Width='10' />
+    <Label Align='Left' CmdID='CMD_CURRENTTIME_MIN_MESSAGE' ColorX='864' ColorY='528' Width='50' AutoSize='1' FontName='Tahoma' FontSize='11' VertAlignment='1' OffsetTop='1' />
+    <Layout Align='Left' Width='5' />
+    <Label Align='Left' CmdID='' ColorX='875' ColorY='528' Width='10' AutoSize='1' FontName='Tahoma' FontSize='11' Text='/' VertAlignment='1' OffsetTop='1' />
+    <Layout Align='Left' Width='5' />
+    <Label Align='Left' CmdID='CMD_TOTALTIME_MIN_MESSAGE' ColorX='875' ColorY='528' Width='50' AutoSize='1' FontName='Tahoma' FontSize='11' VertAlignment='1' OffsetTop='1' />
+
+    <!-- Right-aligned controls are declared from the outer edge inward. -->
+    <Button Align='Right' Tooltip='$CMD_FULL_WINDOW' CmdID='CMD_FULL_WINDOW' Width='41' ImageLeft='195' ImageTop='20' ImageWidth='14' ImageHeight='13' Alignment='5' />
+    <Button Align='Right' CmdID='ID_AUDIO_MUTE' Width='41' ImageLeft='175' ImageTop='167' ImageWidth='13' ImageHeight='10' Alignment='5' />
+    <Label Align='Right' CmdID='' Text='字幕和弹幕' Width='92' FontName='#DEFAULT_UI_FONT' FontSize='12' HoriAlignment='1' VertAlignment='1' ColorX='864' ColorY='528' />
+    <!-- The bridge draws the live speed text here; this is the fallback when it is stopped. -->
+    <Label Align='Right' CmdID='' Text='倍速' Width='58' FontName='#DEFAULT_UI_FONT' FontSize='12' HoriAlignment='1' VertAlignment='1' ColorX='864' ColorY='528' />
+</Static>
+
+<Static Image='Main.png' Align='Bottom' Height='22' LeftMargin='10' RightMargin='10' ImageLeft='3' ImageTop='668' ImageWidth='306' ImageHeight='22' AltImageLeft='371' AltImageTop='668'>
+    <Slider Align='Client' CmdID='CMD_TIMEBAR_CTRL' Alignment='1' ImageWidth='95' ImageHeight='10' ThumbWidth='11' ThumbHeight='10'
+        ImageLeft='0' ImageTop='179' BackImageLeft='0' BackImageTop='193' AltImageLeft='0' AltImageTop='207' ThumbImageLeft='1' ThumbImageTop='239'
+        LeftMargin='10' RightMargin='10' RepeatAImageLeft='148' RepeatAImageTop='241' RepeatBImageLeft='155' RepeatBImageTop='241' RepeatImageWidth='6' RepeatImageHeight='10'
+        BookmarkImageLeft='171' BookmarkImageTop='241' SeamlessImageLeft='188' SeamlessImageTop='241' AdvertImageLeft='105' AdvertImageTop='179' AdvertImageWidth='6' />
+</Static>
