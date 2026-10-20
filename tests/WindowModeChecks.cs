@@ -12,9 +12,23 @@ internal static class WindowModeChecks
     static void Wait(int milliseconds) { Thread.Sleep(milliseconds); }
     static Rectangle Bounds(IntPtr player) { Native.Rect r; Native.GetWindowRect(player, out r); return Rectangle.FromLTRB(r.left, r.top, r.right, r.bottom); }
     static bool Property(IntPtr player, string name) { return GetProp(player, "BilibiliLayout." + name) != IntPtr.Zero; }
-    static void Size(IntPtr player, int width, int height) { Native.SetWindowPos(player, IntPtr.Zero, 40, 70, width, height, 0x0014); Wait(300); }
+    static void Size(IntPtr player, int width, int height)
+    {
+        if ((Native.GetWindowLong(player, -16) & 0x01000000) != 0) { long unused; Native.TrySend(player, 0x112, 0xF120, 0, out unused); Wait(150); }
+        Native.SetWindowPos(player, IntPtr.Zero, 40, 70, width, height, 0x0014); Wait(300);
+    }
     static void Key(IntPtr player, byte key) { Native.SetForegroundWindow(player); Wait(100); keybd_event(key, 0, 0, UIntPtr.Zero); Wait(30); keybd_event(key, 0, 2, UIntPtr.Zero); Wait(350); }
-    static void Open(IntPtr player, bool value) { if (Property(player, "Intent") != value) Native.SetCommand(player, 10011); Wait(200); }
+    static void Open(IntPtr player, bool value) { if (Property(player, "Intent") != value) WindowLayout.TogglePlaylist(player); Wait(200); }
+    static void CheckPlaylist(IntPtr player, string mode)
+    {
+        IntPtr pane = GetProp(player, "BilibiliLayout.Sidebar"), list = GetProp(player, "BilibiliLayout.Playlist");
+        Check(pane != IntPtr.Zero && list != IntPtr.Zero && Native.IsWindowVisible(pane) && Native.IsWindowVisible(list), mode + ": the actual playlist control is visible");
+        Rectangle sidebar = Bounds(pane), rows = Bounds(list), video = Native.ClientBounds(Native.VideoSurface(player));
+        Check(sidebar.Contains(rows) && rows.Width > 100 && rows.Height > 50 && video.Right <= sidebar.Left, mode + ": playlist rows occupy the reserved area beside the video");
+        Native.Point point = new Native.Point { x = rows.Left + rows.Width / 2, y = rows.Top + 10 };
+        IntPtr target = Native.WindowFromPoint(point);
+        Check(target == list || Native.IsChild(list, target), mode + ": playlist rows receive mouse input");
+    }
     internal static void Run()
     {
         List<IntPtr> players = Native.PlayerWindows();
@@ -25,16 +39,18 @@ internal static class WindowModeChecks
             for (int i = 0; i < 100 && !Property(player, "Original"); i++) Wait(100);
             Check(Property(player, "Original"), "UI-thread layout hook is attached");
             if (Native.IsFullscreen(player)) Native.Fullscreen(player);
-            Size(player, 1100, 700); Open(player, true);
-            Check(Property(player, "Open") && PlaylistLayout.IsOpen(player), "sidebar opens inside the player");
+            Size(player, 1100, 700); Open(player, false);
+            Native.Point initialPointer, openedPointer; Native.GetCursorPos(out initialPointer);
             Rectangle stable = Bounds(player); var samples = new List<Rectangle>(); bool finished = false;
             Thread sampler = new Thread(delegate() { while (!Volatile.Read(ref finished)) { lock (samples) samples.Add(Bounds(player)); Thread.Sleep(1); } });
-            long clamped = GetProp(player, "BilibiliLayout.ClampedCount").ToInt64();
             sampler.Start();
-            try { for (int i = 0; i < 8; i++) { Native.SetCommand(player, 10011); Wait(100); } }
+            try { Open(player, true); for (int i = 0; i < 8; i++) { WindowLayout.TogglePlaylist(player); Wait(100); } }
             finally { Volatile.Write(ref finished, true); sampler.Join(); }
-            Check(samples.Count > 20 && samples.TrueForAll(rect => rect == stable), "outer window never expands during eight playlist toggles (" + samples.Count + " samples)");
-            Check(GetProp(player, "BilibiliLayout.ClampedCount").ToInt64() > clamped, "native resize requests are constrained before commit");
+            Check(Property(player, "Open") && PlaylistLayout.IsOpen(player), "sidebar opens inside the player");
+            Check(samples.Count > 20 && samples.TrueForAll(rect => rect == stable), "outer window never expands during initialization and eight playlist toggles (" + samples.Count + " samples)");
+            Native.GetCursorPos(out openedPointer);
+            Check(initialPointer.x == openedPointer.x && initialPointer.y == openedPointer.y, "playlist initialization and toggling preserve the pointer");
+            CheckPlaylist(player, "after eight toggles");
             Size(player, 900, 650);
             Check(ResponsivePolicy.Stage(900, 650, 1) == PlayerStage.Normal, "sidebar suppression keeps normal playback controls");
             Check(!Property(player, "Open") && Property(player, "Intent") && !PlaylistLayout.IsOpen(player), "small normal window hides sidebar but remembers open intent");
@@ -42,8 +58,27 @@ internal static class WindowModeChecks
             Check(!Property(player, "Open"), "native playlist shortcut cannot open a suppressed sidebar");
             Size(player, 1100, 700);
             Check(Property(player, "Open") && PlaylistLayout.IsOpen(player), "growing the window automatically restores the sidebar");
+            CheckPlaylist(player, "after restoring window size");
             Open(player, false); Size(player, 900, 650); Size(player, 1100, 700);
             Check(!Property(player, "Open") && !Property(player, "Intent"), "explicitly closed sidebar stays closed after resize");
+            for (int width = 1100; width >= 650; width -= 7)
+            {
+                Native.SetWindowPos(player, IntPtr.Zero, 40, 70, width, 650, 0x0014);
+                Check(!Property(player, "Open") && !Property(player, "Intent"), "closed sidebar remains closed while shrinking to " + width);
+            }
+            Size(player, 1100, 700);
+            Key(player, 0x46); Check(Native.IsFullscreen(player), "normal window enters fullscreen");
+            Native.Point pointerBefore, pointerAfter; Native.GetCursorPos(out pointerBefore);
+            Open(player, true); Native.GetCursorPos(out pointerAfter);
+            Rectangle fullClient = Native.ClientBounds(player), fullVideo = Native.ClientBounds(Native.VideoSurface(player));
+            Check(PlaylistLayout.IsOpen(player) && fullVideo.Width < fullClient.Width - 100, "fullscreen sidebar reduces the playback width");
+            CheckPlaylist(player, "fullscreen");
+            Check(pointerBefore.x == pointerAfter.x && pointerBefore.y == pointerAfter.y, "opening the fullscreen sidebar never moves the pointer");
+            Open(player, false); fullVideo = Native.ClientBounds(Native.VideoSurface(player));
+            Check(fullVideo.Width == fullClient.Width, "closing the fullscreen sidebar restores the whole playback area");
+            Native.SetCursorPos(fullClient.Right - 1, fullClient.Top + fullClient.Height / 2); Wait(1800);
+            Check(!Property(player, "Open") && !Property(player, "Intent"), "hovering at the fullscreen right edge does not open the sidebar");
+            Key(player, 0x1B);
             Open(player, true); Key(player, 0x53);
             Rectangle client = Native.ClientBounds(player), video = Native.ClientBounds(Native.VideoSurface(player));
             Check(Property(player, "Small") && client.Width < 800 && !Property(player, "Open") && Property(player, "Intent"), "S enters small-window mode and retains sidebar intent");
@@ -106,6 +141,68 @@ internal static class WindowModeChecks
         Key(player, 0x46); Check(Native.IsFullscreen(player), "F enters fullscreen from small-window mode");
         Key(player, 0x1B); Check(Property(player, "Small") && Native.ClientBounds(player).Size == small.Size, "Escape restores the small window and its size");
     }
+    static IntPtr Surface(IntPtr player, string title)
+    {
+        IntPtr found = IntPtr.Zero;
+        Native.EnumChildWindows(player, delegate(IntPtr child, IntPtr unused) {
+            var text = new System.Text.StringBuilder(100); GetWindowText(child, text, text.Capacity);
+            if (text.ToString() == title && Native.IsWindowVisible(child)) found = child;
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+    internal static void CheckChromeGestures()
+    {
+        IntPtr player = Native.PlayerWindows()[0]; Native.SetForegroundWindow(player);
+        if (Native.IsFullscreen(player)) Key(player, 0x1B);
+        Size(player, 1100, 650); Open(player, false);
+        Rectangle client = Native.ClientBounds(player);
+        Click(client.Right - 90, client.Top + 18);
+        Check(Property(player, "Small"), "the native skin small-window button enters small mode");
+        Key(player, 0x53); Size(player, 1100, 650);
+        client = Native.ClientBounds(player);
+        Native.SetCursorPos(client.Right - 128, client.Bottom - 25); Wait(750);
+        IntPtr menu = Surface(player, "字幕和弹幕菜单");
+        Check(menu != IntPtr.Zero, "hovering the caption button opens the custom menu");
+        Rectangle menuRect = Bounds(menu);
+        Check(menuRect.Height == CaptionDropAreas.MainHeight, "the compact caption menu fits a 650-pixel window without scaling");
+        Native.Point overlap = new Native.Point {x = menuRect.Left + menuRect.Width / 2, y = menuRect.Bottom - 7};
+        bool menuAlwaysAbove = true;
+        for (int i = 0; i < 80; i++) { if (Native.WindowFromPoint(overlap) != menu) menuAlwaysAbove = false; Wait(4); }
+        Check(menuAlwaysAbove, "the seek bar never overtakes the caption menu across repeated redraws");
+        Native.SetCursorPos(client.Left + 200, client.Top + 200); Wait(700);
+        // Drag across both responsive thresholds while observing native visibility.
+        Size(player, 1100, 700); Open(player, false);
+        bool finished = false, nativeHeaderFlashed = false, sidebarFlashed = false, controlsFlashed = false;
+        IntPtr controlSurface = Surface(player, "播放控制栏");
+        Thread sample = new Thread(delegate() {
+            while (!Volatile.Read(ref finished)) {
+                if (Property(player, "Small") && Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Header"))) nativeHeaderFlashed = true;
+                if (Property(player, "Open") || Property(player, "Intent") || Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Sidebar"))) sidebarFlashed = true;
+                Rectangle current = Native.ClientBounds(player);
+                if (Property(player, "Sizing") && Native.WindowFromPoint(new Native.Point {x = current.Left + 20, y = current.Bottom - 20}) == controlSurface) controlsFlashed = true;
+                Thread.Sleep(1);
+            }
+        });
+        Rectangle before = Bounds(player); sample.Start();
+        try { Drag(before.Right - 1, before.Bottom - 1, -440, -300); }
+        finally { Volatile.Write(ref finished, true); sample.Join(); }
+        Check(Property(player, "Small") && !nativeHeaderFlashed, "continuous resize enters small mode without showing the native title bar");
+        Check(!sidebarFlashed, "continuous resize never flashes a closed sidebar");
+        Check(!controlsFlashed, "hover controls remain hidden throughout the window resize gesture");
+        Size(player, 1100, 650); Key(player, 0x46); client = Native.ClientBounds(player);
+        Native.SetCursorPos(client.Left + client.Width / 2, client.Top + client.Height / 2); Wait(300);
+        Native.Point control = new Native.Point { x = client.Left + 20, y = client.Bottom - 20 };
+        IntPtr chrome = Surface(player, "播放控制栏");
+        Check(chrome != IntPtr.Zero && Native.WindowFromPoint(control) == chrome, "fullscreen mouse movement shows the controls");
+        Wait(3200);
+        Check(Native.WindowFromPoint(control) != chrome, "fullscreen controls disappear after the mouse stays still");
+        Native.Point pointer; Native.GetCursorPos(out pointer); Native.SetCursorPos(pointer.x + 10, pointer.y); Wait(200);
+        Check(Native.WindowFromPoint(control) == chrome, "moving the mouse reveals fullscreen controls again");
+        Key(player, 0x1B);
+        Console.WriteLine("PASS: " + checks + " chrome and resize checks");
+    }
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int count);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetProp(IntPtr window, string name);
     [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
 }

@@ -38,13 +38,13 @@ namespace BilibiliPotPlayer
         internal void Update(long now, IntPtr focused)
         {
             Mode.Update();
-            Rectangle client = Native.ClientBounds(Player);
-            Layout.Update(Stage == PlayerStage.Small, Stage == PlayerStage.Small && Mode.AspectLocked ? Mode.Ratio : 0);
-            if (Layout.Available) Playlist.Update(Stage == PlayerStage.Normal && ResponsivePolicy.SidebarAllowed(client.Width, client.Height, Math.Max(96, Native.GetDpiForWindow(Player)) / 96.0));
+            Layout.Update(Stage == PlayerStage.Small && Mode.AspectLocked ? Mode.Ratio : 0);
+            if (Layout.Available) Playlist.Update();
             Streams.UpdatePlayer(Player, now, false, true);
             Captions.Tick(now);
-            Overlay.MenuWindow = SubtitleMenu.Visible ? SubtitleMenu.Handle : IntPtr.Zero; Overlay.Update(Player, now);
+            Overlay.MenuWindow = Chrome.IsHandleCreated ? Chrome.Handle : IntPtr.Zero; Overlay.Update(Player, now);
             Chrome.UpdatePlayer(now);
+            if (Chrome.IsHandleCreated) Layout.BindChrome(Chrome.Handle);
             IntPtr interactive = focused == Player && Chrome.ControlsVisible ? Player : IntPtr.Zero;
             Native.Point pointer;
             if (interactive != IntPtr.Zero && Native.GetCursorPos(out pointer))

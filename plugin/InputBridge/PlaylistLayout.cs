@@ -25,16 +25,13 @@ namespace BilibiliPotPlayer
         {
             if (!allowed && !Requested) return;
             if (!allowed) { Set("Intent", false); return; }
-            Native.SetCommand(player, 10011);
+            WindowLayout.TogglePlaylist(player);
         }
-        internal void Update(bool canOpen)
+        internal void Update()
         {
-            allowed = canOpen; Set("AllowSidebar", allowed);
-            bool target = Requested && allowed, actual = GetProp(player, "BilibiliLayout.Open") != IntPtr.Zero;
-            if (target == actual) return;
-            Set("Automatic", true);
-            try { Native.SetCommand(player, 10011); }
-            finally { Set("Automatic", false); }
+            // The UI-thread layout owns actual visibility. Never infer intent from
+            // a renderer rectangle while the native skin is midway through resizing.
+            allowed = GetProp(player, "BilibiliLayout.AllowSidebar") != IntPtr.Zero;
         }
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SetProp(IntPtr window, string name, IntPtr value);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetProp(IntPtr window, string name);

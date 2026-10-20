@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Web.Script.Serialization;
@@ -27,6 +27,7 @@ internal static class BridgeTests
         if (args.Length > 0 && args[0] == "--window-check") { WindowModeChecks.Run(); return 0; }
         if (args.Length > 0 && args[0] == "--aspect-check") { WindowModeChecks.CheckAspect(); return 0; }
         if (args.Length > 0 && args[0] == "--aspect-gesture-check") { WindowModeChecks.CheckAspectGestures(); return 0; }
+        if (args.Length > 0 && args[0] == "--chrome-check") { WindowModeChecks.CheckChromeGestures(); return 0; }
         if (args.Length > 0 && args[0] == "--layout-check") { WindowModeChecks.Run(); return 0; }
         if (args.Length > 0 && args[0] == "--status") { Status(); return 0; }
         if (args.Length > 0 && args[0] == "--ui-status") { UiStatus(); return 0; }
@@ -113,7 +114,7 @@ internal static class BridgeTests
         foreach (TextCategory category in (TextCategory[])Enum.GetValues(typeof(TextCategory)))
         {
             RectangleF area = CaptionDropAreas.Bounds(category);
-            Equal(124f, area.Height, category + " has equal space for three tracks and pagination");
+            Equal(100f, area.Height, category + " has equal space for three tracks and pagination");
             Equal((TextCategory?)category, CaptionDropAreas.At(area.X + 10, area.Bottom - 1), category + " third-row drop remains inside its own area");
         }
         Equal((TextCategory?)null, CaptionDropAreas.At(308, 100), "divider is not a drop target");
@@ -127,6 +128,15 @@ internal static class BridgeTests
         Equal(PlayerStage.Normal, ResponsivePolicy.Stage(2200, 1400, 2), "responsive breakpoints use logical pixels at high DPI");
         Equal(PlayerStage.Normal, ResponsivePolicy.Stage(1024, 600, 1), "first transition returns full controls at its boundary");
         Equal(PlayerStage.Normal, ResponsivePolicy.Stage(800, 480, 1), "second transition restores full control row at its boundary");
+        ChromeActivity chrome = new ChromeActivity();
+        Equal(true, chrome.Visible(0, 10, 20, true, true, false), "fullscreen controls start visible");
+        Equal(true, chrome.Visible(2999, 10, 20, true, true, false), "fullscreen controls remain until the idle deadline");
+        Equal(false, chrome.Visible(3000, 10, 20, true, true, false), "stationary fullscreen controls hide after three seconds");
+        Equal(true, chrome.Visible(3100, 11, 20, true, true, false), "pointer movement reveals fullscreen controls");
+        Equal(true, chrome.Visible(7000, 11, 20, true, true, true), "open menus keep fullscreen controls visible");
+        Equal(false, chrome.Visible(7100, 11, 20, false, true, false), "leaving the player hides controls immediately");
+        Equal(true, chrome.Visible(7200, 11, 20, true, true, false), "reentering the player resets the idle deadline");
+        Equal(true, chrome.Visible(20000, 11, 20, true, false, false), "windowed hover does not time out");
         CaptionLoadingChecks();
         CameraGesture camera = new CameraGesture();
         camera.Begin(100, 100); camera.Move(105, 102); camera.End(105, 102);
@@ -336,7 +346,7 @@ internal static class BridgeTests
             for (int i = 0; i < 24; i++) captions.Sources.Add(new TextSource { Id = "subtitle-" + i, Title = i < 2 ? i == 0 ? "中文软字幕" : "English subtitle" : "外挂字幕 " + (i + 1) + ".srt", Category = TextCategory.Subtitle, Loaded = true });
             foreach (TextCategory category in new[] { TextCategory.Danmaku, TextCategory.Uncertain, TextCategory.Advanced })
                 for (int i = 0; i < 3; i++) captions.Sources.Add(new TextSource { Id = category + "-" + i, Title = (category == TextCategory.Danmaku ? "普通弹幕" : category == TextCategory.Uncertain ? "用途待定" : "高级弹幕") + (i + 1) + ".xml", Category = category, Enabled = category == TextCategory.Danmaku, IntrinsicAdvanced = category == TextCategory.Advanced, Loaded = true });
-            captions.Slots.Main = "subtitle-0"; popup.Size = new Size(620, 656);
+            captions.Slots.Main = "subtitle-0"; popup.Size = new Size(620, CaptionDropAreas.MainHeight);
             Type type = typeof(SubtitlePopup); var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
             var paint = type.GetMethod("OnPaint", flags);
             foreach (string view in new string[] { "normal", "page4", "page5", "drag-subtitle", "drag-uncertain", "blocked-filters", "advanced-settings", "font-picker", "color-picker", "subtitle-settings" })
@@ -350,11 +360,11 @@ internal static class BridgeTests
                 type.GetField("start", flags).SetValue(popup, new PointF(70, source.Category == TextCategory.Subtitle ? 60 : 229));
                 type.GetField("dragPoint", flags).SetValue(popup, new PointF(420, 115));
                 Type hitType = type.GetNestedType("Hit", System.Reflection.BindingFlags.NonPublic); object hit = Activator.CreateInstance(hitType, true);
-                RectangleF bounds = CaptionDropAreas.Bounds(source.Category); bounds.Height = 35;
+                RectangleF bounds = CaptionDropAreas.Bounds(source.Category); bounds.Height = 27;
                 hitType.GetField("Rect", flags).SetValue(hit, bounds); type.GetField("pressed", flags).SetValue(popup, hit);
-                using (Bitmap bitmap = new Bitmap(620, 656))
+                using (Bitmap bitmap = new Bitmap(620, CaptionDropAreas.MainHeight))
                 using (Graphics graphics = Graphics.FromImage(bitmap))
-                { graphics.Clear(Color.FromArgb(28, 29, 32)); paint.Invoke(popup, new object[] { new PaintEventArgs(graphics, new Rectangle(0, 0, 620, 656)) }); bitmap.Save(System.IO.Path.Combine(folder, view + ".png"), System.Drawing.Imaging.ImageFormat.Png); }
+                { graphics.Clear(Color.FromArgb(28, 29, 32)); paint.Invoke(popup, new object[] { new PaintEventArgs(graphics, new Rectangle(Point.Empty, bitmap.Size)) }); bitmap.Save(System.IO.Path.Combine(folder, view + ".png"), System.Drawing.Imaging.ImageFormat.Png); }
             }
         }
         Console.WriteLine("Caption previews: " + folder);
@@ -469,16 +479,15 @@ internal static class BridgeTests
             probes.Add(new { Player = player.ToInt64(), Body = Native.WindowFromPoint(body).ToInt64(), Control = Native.WindowFromPoint(control).ToInt64(), BarVisible = Native.ControlBarVisible(player) });
             Native.EnumChildWindows(player, delegate(IntPtr child, IntPtr data)
             {
-                if (!Native.IsWindowVisible(child)) return true;
                 uint childPid; Native.GetWindowThreadProcessId(child, out childPid);
                 System.Text.StringBuilder name = new System.Text.StringBuilder(128); Native.GetClassName(child, name, name.Capacity);
                 Native.Rect bounds; Native.GetWindowRect(child, out bounds);
                 if (bounds.right > bounds.left && bounds.bottom > bounds.top)
-                    nativeFrames.Add(new { Window = child.ToInt64(), Class = name.ToString(), Bounds = new int[] { bounds.left, bounds.top, bounds.right, bounds.bottom } });
+                    nativeFrames.Add(new { Window = child.ToInt64(), Parent = Native.GetParent(child).ToInt64(), Visible = Native.IsWindowVisible(child), Class = name.ToString(), Bounds = new int[] { bounds.left, bounds.top, bounds.right, bounds.bottom } });
                 if (childPid != pid)
                 {
                     System.Text.StringBuilder title = new System.Text.StringBuilder(128); GetWindowText(child, title, title.Capacity);
-                    if (title.ToString() == "倍速按钮" || title.ToString() == "音频参数" || title.ToString() == "视频参数" || title.ToString() == "字幕和弹幕画面" || title.ToString() == "字幕和弹幕菜单" || title.ToString() == "字幕和弹幕")
+                    if (title.ToString() == "播放控制栏" || title.ToString() == "倍速按钮" || title.ToString() == "音频参数" || title.ToString() == "视频参数" || title.ToString() == "字幕和弹幕画面" || title.ToString() == "字幕和弹幕菜单" || title.ToString() == "字幕和弹幕")
                         surfaces.Add(new { Title = title.ToString(), Window = child.ToInt64(), Parent = Native.GetParent(child).ToInt64(),
                             Root = Native.GetAncestor(child, 2).ToInt64(), Embedded = (Native.GetWindowLong(child, -16) & 0x40000000) != 0,
                             Dpi = Native.GetDpiForWindow(child), DpiContext = Native.GetWindowDpiAwarenessContext(child).ToInt64(),

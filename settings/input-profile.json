@@ -34,6 +34,7 @@
     "MouseWheelRight": 22,
     "PlayUseKeyFrame": 0,
     "Video360Preview": 0,
+    "AttachOpenFullScreen": 0,
     "SkinPopupMenuStyle": 1
   }
 }

@@ -1,4 +1,4 @@
-﻿<?XML version='1.0' ?>
+<?XML version='1.0' ?>
 
 <Skin Version='1.0' MinorVersion='1000'>
 
@@ -30,23 +30,8 @@
 		</Control>
 	</MainSkinAreaOscFrame>
 	<MainSkinAreaOscInside Image='Main.png'>
-		#include<Logo.txt>
-		<Control>
-			#if<SkinType==Touch>
-				#include<TouchTop.txt>
-				#include<TopCast.txt>
-				#include<TouchBottom.txt>
-			#else
-				#include<TopCommon.txt>
-				#include<TopCast.txt>
-
-			#endif
-			#include<Popup.txt>
-			#if<SkinName!=WdmSkin>
-				#include<BottomVod.txt>
-			#endif
-		</Control>
-	</MainSkinAreaOscInside>
+        <Control />
+    </MainSkinAreaOscInside>
 
 #if<SkinType==Touch>
 	<MainSkinArea WidthLimit='380'

@@ -2,6 +2,20 @@ using System;
 
 namespace BilibiliPotPlayer
 {
+    internal sealed class ChromeActivity
+    {
+        internal const int FullscreenIdleMilliseconds = 3000;
+        bool initialized, wasInside, wasFullscreen;
+        int x, y;
+        long moved;
+        internal bool Visible(long now, int px, int py, bool inside, bool fullscreen, bool interacting)
+        {
+            if (!initialized || px != x || py != y || inside && !wasInside || fullscreen != wasFullscreen) moved = now;
+            initialized = true; x = px; y = py; wasInside = inside; wasFullscreen = fullscreen;
+            if (interacting) { moved = now; return true; }
+            return inside && (!fullscreen || now - moved < FullscreenIdleMilliseconds);
+        }
+    }
     internal enum KeyRoute { Native, Mapped, Blocked }
     internal static class InputPolicy
     {

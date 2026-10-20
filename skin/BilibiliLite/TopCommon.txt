@@ -28,7 +28,8 @@
 				<Layout Align='Right' Width='10' />
 				<Button Align='Right' Tooltip='$CMD_MIN_WINDOW' CmdID='CMD_MIN_WINDOW' Width='14' ImageLeft='0' ImageTop='20' ImageWidth='14' ImageHeight='13' Alignment='5' />
 				<Layout Align='Right' Width='10' />
-				<Layout Align='Right' Width='24' />
+				<Button Align='Right' Tooltip='小窗模式 (S)' CmdID='ID_WINDOW_MOVE_CENTER' Width='14' Image='WindowMode.png' ImageLeft='0' ImageTop='0' ImageWidth='14' ImageHeight='13' Alignment='5' />
+				<Layout Align='Right' Width='10' />
 				<Button Align='Right' Tooltip='$ALWAYS_ON_TOP_CYCLE' CmdID='ID_ETC_NEXTONTOP' Width='14' ImageLeft='485' ImageTop='68' ImageWidth='14' ImageHeight='13' Alignment='5' AutoVisible='1' />
 				<Button Align='Right' Tooltip='$ALWAYS_ON_TOP' CmdID='ID_ETC_NEXTONTOP' Width='14' ImageLeft='550' ImageTop='68' ImageWidth='14' ImageHeight='13' Alignment='5' AutoVisible='2' />
 				<Button Align='Right' Tooltip='$ALWAYS_ON_TOP_PLAY' CmdID='ID_ETC_NEXTONTOP' Width='14' ImageLeft='615' ImageTop='68' ImageWidth='14' ImageHeight='13' Alignment='5' AutoVisible='3' />

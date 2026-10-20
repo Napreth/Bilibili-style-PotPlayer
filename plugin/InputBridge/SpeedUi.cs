@@ -102,13 +102,13 @@ namespace BilibiliPotPlayer
             Hide();
             if (focused && Native.IsWindow(Player)) Native.SetForegroundWindow(Player);
         }
-        protected void Reveal()
+        protected void Reveal(bool raise = true)
         {
             if (embedded)
             {
                 if (!Native.IsWindow(embeddedParent)) { Dismiss(); return; }
                 if (!Visible) Show();
-                Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, 0x0013);
+                if (raise) Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, 0x0013);
                 return;
             }
             if (attachedOwner != Player && Native.IsWindow(Player))

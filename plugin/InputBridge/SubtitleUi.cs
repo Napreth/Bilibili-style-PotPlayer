@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -16,8 +16,9 @@ namespace BilibiliPotPlayer
     }
     internal static class CaptionDropAreas
     {
+        internal const int RowHeight = 28, MainHeight = 556;
         internal static RectangleF Bounds(TextCategory category)
-        { return new RectangleF(category == TextCategory.Subtitle || category == TextCategory.Uncertain ? 16 : 326, category == TextCategory.Subtitle || category == TextCategory.Danmaku ? 43 : 212, 274, 124); }
+        { return new RectangleF(category == TextCategory.Subtitle || category == TextCategory.Uncertain ? 16 : 326, category == TextCategory.Subtitle || category == TextCategory.Danmaku ? 39 : 180, 274, 100); }
         internal static TextCategory? At(float x, float y)
         { foreach (TextCategory category in (TextCategory[])Enum.GetValues(typeof(TextCategory))) if (Bounds(category).Contains(x, y)) return category; return null; }
     }
@@ -68,9 +69,10 @@ namespace BilibiliPotPlayer
             if (Visible && !overButton && !overPanel && !Capture && now - lastInside >= 450) { Dismiss(); page = picker = 0; return; }
             if (!Visible && (!overButton || now - hoverSince < 120)) return;
             Player = player; Rectangle client = Native.ClientBounds(player);
-            scale = Math.Min(Math.Max(96, Native.GetDpiForWindow(player)) / 96f, Math.Min(client.Width / 620f, Math.Max(1, client.Height - 50) / 656f));
+            int logicalHeight = page == 0 ? CaptionDropAreas.MainHeight : 656;
+            scale = Math.Min(Math.Max(96, Native.GetDpiForWindow(player)) / 96f, Math.Min(client.Width / 620f, Math.Max(1, client.Height - 50) / (float)logicalHeight));
             if (now >= nextLanguageRead) { english = UiLanguage.Read().Subtitles == "Subtitles & danmaku"; nextLanguageRead = now + 1000; }
-            int width = (int)(620 * scale), height = (int)(656 * scale); Rectangle screen = Screen.FromHandle(player).WorkingArea, anchor = button.ScreenBounds;
+            int width = (int)(620 * scale), height = (int)(logicalHeight * scale); Rectangle screen = Screen.FromHandle(player).WorkingArea, anchor = button.ScreenBounds;
             Rectangle rect = new Rectangle(Math.Max(screen.Left, Math.Min(screen.Right - width, anchor.Right - width)), Math.Max(screen.Top, anchor.Top - height), width, height);
             rect.X = Math.Max(client.Left, Math.Min(client.Right - width, rect.X)); rect.Y = Math.Max(client.Top, Math.Min(client.Bottom - height, rect.Y));
             if (!PlaceInPlayer(player, rect)) { Dismiss(); return; } Reveal(); Invalidate();
@@ -105,7 +107,7 @@ namespace BilibiliPotPlayer
             if (sources.Count == 0) Label(graphics, catalog.Discovering && category != TextCategory.Advanced ? L("正在读取…", "Loading…") : L("暂无文件", "No files"), R(x + 8, y, width - 16, 34), muted);
             for (int i = first; i < sources.Count && i < first + count; i++)
             {
-                TextSource source = sources[i]; float rowY = y + (i - first) * 36; RectangleF rect = R(x, rowY, width, 35);
+                TextSource source = sources[i]; float rowY = y + (i - first) * CaptionDropAreas.RowHeight; RectangleF rect = R(x, rowY, width, 27);
                 // Keep the source slot empty throughout the drag; its neighbours do not move.
                 if (dragging && source == dragSource) continue;
                 PaintRow(graphics, source, x, rowY, width, hits.Count == hovered);
@@ -115,7 +117,7 @@ namespace BilibiliPotPlayer
             if (pages <= 1) return;
             bool previous = firstDot > 0, next = firstDot + visible < pages;
             int indicators = visible + (previous ? 1 : 0) + (next ? 1 : 0);
-            float left = x + (width - indicators * 22) / 2, centerY = y + count * 36 + 8;
+            float left = x + (width - indicators * 22) / 2, centerY = y + count * CaptionDropAreas.RowHeight + 8;
             if (previous) { PageArrow(graphics, list, left, centerY, -1); left += 22; }
             for (int i = 0; i < visible; i++)
             {
@@ -137,16 +139,16 @@ namespace BilibiliPotPlayer
             TextCategory category = source.Category;
             bool main = catalog.Slots.Main == source.Id, secondary = catalog.Slots.Secondary == source.Id;
             bool isSelected = category == TextCategory.Subtitle ? main || secondary : source.Enabled, enabled = CaptionCatalog.CanUse(source);
-            if (hover) using (Brush brush = new SolidBrush(Color.FromArgb(43, 45, 51))) graphics.FillRectangle(brush, R(x, y, width, 35));
+            if (hover) using (Brush brush = new SolidBrush(Color.FromArgb(43, 45, 51))) graphics.FillRectangle(brush, R(x, y, width, 27));
             if (category == TextCategory.Subtitle)
             {
-                if (catalog.Slots.Multi && isSelected) Label(graphics, main ? L("主", "P") : L("副", "S"), R(x + 3, y + 2, 24, 31), selected, true, 13, true);
+                if (catalog.Slots.Multi && isSelected) Label(graphics, main ? L("主", "P") : L("副", "S"), R(x + 3, y, 24, 27), selected, true, 13, true);
                 else using (Pen circle = new Pen(isSelected ? selected : muted, 1.5f * scale))
-                { graphics.DrawEllipse(circle, R(x + 8, y + 12, 12, 12)); if (isSelected) using (Brush dot = new SolidBrush(selected)) graphics.FillEllipse(dot, R(x + 11, y + 15, 6, 6)); }
+                { graphics.DrawEllipse(circle, R(x + 8, y + 8, 12, 12)); if (isSelected) using (Brush dot = new SolidBrush(selected)) graphics.FillEllipse(dot, R(x + 11, y + 11, 6, 6)); }
             }
-            else if (category == TextCategory.Danmaku || category == TextCategory.Advanced) Switch(graphics, x + 1, y, source.Enabled, enabled);
+            else if (category == TextCategory.Danmaku || category == TextCategory.Advanced) Switch(graphics, x + 1, y - 4, source.Enabled, enabled);
             float inset = category == TextCategory.Uncertain ? 8 : 40;
-            Label(graphics, source.Title, R(x + inset, y, width - inset - 8, 35), enabled ? isSelected ? selected : Color.White : muted, isSelected, 12);
+            Label(graphics, source.Title, R(x + inset, y, width - inset - 8, 27), enabled ? isSelected ? selected : Color.White : muted, isSelected, 12);
         }
         void DraggedRow(Graphics graphics)
         {
@@ -179,22 +181,22 @@ namespace BilibiliPotPlayer
         }
         void MainPage(Graphics graphics)
         {
-            Line(graphics, 307, 10, 307, 646);
+            Line(graphics, 307, 10, 307, CaptionDropAreas.MainHeight - 10);
             Label(graphics, L("字幕", "Subtitles"), R(18, 9, 260, 28), Color.White, true, 14); Label(graphics, L("弹幕", "Danmaku"), R(328, 9, 260, 28), Color.White, true, 14);
-            Rows(graphics, TextCategory.Subtitle, 0, 16, 43, 3, 274); Rows(graphics, TextCategory.Danmaku, 1, 326, 43, 3, 274);
-            Line(graphics, 16, 179, 290, 179); Line(graphics, 326, 179, 603, 179);
-            Label(graphics, L("分类存疑（请拖动到对应分类）", "Uncertain · drag to a category"), R(18, 186, 270, 24), Color.White, true, 11);
-            Rows(graphics, TextCategory.Uncertain, 2, 16, 212, 3, 274);
-            Label(graphics, L("高级弹幕", "Advanced danmaku"), R(328, 186, 270, 24), Color.White, true); Rows(graphics, TextCategory.Advanced, 3, 326, 212, 3, 274);
-            Line(graphics, 16, 344, 290, 344); Line(graphics, 326, 344, 603, 344);
-            Switch(graphics, 24, 354, catalog.Slots.Multi); Label(graphics, L("多语言字幕", "Bilingual subtitles"), R(66, 354, 210, 34), Color.White); Register(R(20, 353, 266, 35), delegate { catalog.SetMulti(!catalog.Slots.Multi); });
-            Link(graphics, L("实时字幕翻译 · 未接入", "Subtitle translation · unavailable"), 66, 388, 222, delegate { }, false);
-            Link(graphics, L("在线字幕搜索", "Online subtitle search"), 66, 416, 180, delegate { Dismiss(); Native.SetCommand(Player, 10863); });
-            Link(graphics, L("语音生成字幕 · 未接入", "Speech subtitles · unavailable"), 66, 444, 183, delegate { }, false);
-            Link(graphics, L("从文件加载字幕/弹幕", "Load subtitles / danmaku"), 66, 472, 190, Import);
+            Rows(graphics, TextCategory.Subtitle, 0, 16, 39, 3, 274); Rows(graphics, TextCategory.Danmaku, 1, 326, 39, 3, 274);
+            Line(graphics, 16, 147, 290, 147); Line(graphics, 326, 147, 603, 147);
+            Label(graphics, L("分类存疑（请拖动到对应分类）", "Uncertain · drag to a category"), R(18, 154, 270, 24), Color.White, true, 11);
+            Rows(graphics, TextCategory.Uncertain, 2, 16, 180, 3, 274);
+            Label(graphics, L("高级弹幕", "Advanced danmaku"), R(328, 154, 270, 24), Color.White, true); Rows(graphics, TextCategory.Advanced, 3, 326, 180, 3, 274);
+            Line(graphics, 16, 284, 290, 284); Line(graphics, 326, 284, 603, 284);
+            Switch(graphics, 24, 294, catalog.Slots.Multi); Label(graphics, L("多语言字幕", "Bilingual subtitles"), R(66, 294, 210, 34), Color.White); Register(R(20, 293, 266, 35), delegate { catalog.SetMulti(!catalog.Slots.Multi); });
+            Link(graphics, L("实时字幕翻译 · 未接入", "Subtitle translation · unavailable"), 66, 328, 222, delegate { }, false);
+            Link(graphics, L("在线字幕搜索", "Online subtitle search"), 66, 356, 180, delegate { Dismiss(); Native.SetCommand(Player, 10863); });
+            Link(graphics, L("语音生成字幕 · 未接入", "Speech subtitles · unavailable"), 66, 384, 183, delegate { }, false);
+            Link(graphics, L("从文件加载字幕/弹幕", "Load subtitles / danmaku"), 66, 412, 190, Import);
             DanmakuMain(graphics);
-            Nut(graphics, 267, 625, delegate { page = 1; picker = 0; }); Nut(graphics, 576, 625, delegate { page = 2; picker = 0; });
-            if (catalog.Status.Length > 0) Label(graphics, catalog.Status, R(18, 577, 274, 32), accent, false, 11);
+            Nut(graphics, 267, 446, delegate { page = 1; picker = 0; }); Nut(graphics, 576, 520, delegate { page = 2; picker = 0; });
+            if (catalog.Status.Length > 0) Label(graphics, catalog.Status, R(18, 480, 274, 56), accent, false, 11);
         }
         void Nut(Graphics graphics, float x, float y, Action action)
         {
@@ -207,33 +209,33 @@ namespace BilibiliPotPlayer
         void FilterIcon(Graphics graphics, int index, float x, bool allowed, Action action)
         {
             bool blocked = !allowed; Color color = blocked ? accent : Color.FromArgb(220, 220, 220);
-            filterIcons[index].Draw(graphics, (x + 7) * scale, 387 * scale, 28 * scale, color);
+            filterIcons[index].Draw(graphics, (x + 7) * scale, 327 * scale, 28 * scale, color);
             if (blocked)
             {
-                RectangleF badge = R(x + 32, 405, 13, 13);
-                using (Brush back = new SolidBrush(BackColor)) graphics.FillEllipse(back, R(x + 30, 403, 17, 17));
-                using (Pen pen = new Pen(color, 2.2f * scale)) { graphics.DrawEllipse(pen, badge); graphics.DrawLine(pen, (x + 35) * scale, 408 * scale, (x + 42) * scale, 415 * scale); }
+                RectangleF badge = R(x + 32, 345, 13, 13);
+                using (Brush back = new SolidBrush(BackColor)) graphics.FillEllipse(back, R(x + 30, 343, 17, 17));
+                using (Pen pen = new Pen(color, 2.2f * scale)) { graphics.DrawEllipse(pen, badge); graphics.DrawLine(pen, (x + 35) * scale, 348 * scale, (x + 42) * scale, 355 * scale); }
             }
             string[] labels = { L("滚动", "Scroll"), L("固定", "Fixed"), L("彩色", "Color"), L("高级", "Advanced") };
-            Label(graphics, labels[index], R(x, 418, 54, 22), color, false, 11, true);
-            Register(R(x, 384, 54, 57), action);
+            Label(graphics, labels[index], R(x, 358, 54, 22), color, false, 11, true);
+            Register(R(x, 324, 54, 57), action);
         }
         void DanmakuMain(Graphics graphics)
         {
             CaptionOptions options = catalog.Options;
-            Label(graphics, L("按类型过滤", "Filter by type"), R(330, 354, 268, 27), Color.White, false, 13);
+            Label(graphics, L("按类型过滤", "Filter by type"), R(330, 294, 268, 27), Color.White, false, 13);
             FilterIcon(graphics, 0, 327, options.Scrolling, delegate { options.Scrolling = !options.Scrolling; Changed(); });
             FilterIcon(graphics, 1, 395, options.Fixed, delegate { options.Fixed = !options.Fixed; Changed(); });
             FilterIcon(graphics, 2, 463, options.Colored, delegate { options.Colored = !options.Colored; Changed(); });
             FilterIcon(graphics, 3, 531, false, delegate { catalog.Status = L("高级弹幕暂不支持播放", "Advanced danmaku unavailable"); Invalidate(); });
-            Checkbox(graphics, L("弹幕随屏幕缩放", "Scale with screen"), 330, 442, 166, options.ScaleWithScreen, delegate { options.ScaleWithScreen = !options.ScaleWithScreen; Changed(); });
-            Checkbox(graphics, L("防挡字幕", "Avoid subtitles"), 500, 442, 106, options.AvoidSubtitles, delegate { options.AvoidSubtitles = !options.AvoidSubtitles; Changed(); });
-            CompactSlider(graphics, L("显示区域", "Area"), 477, options.Region, 10, 100, options.Region + "%", value => options.Region = value, DanmakuSettings.Regions);
-            CompactSlider(graphics, L("不透明度", "Opacity"), 511, options.Opacity, 10, 100, options.Opacity + "%", value => options.Opacity = value);
+            Checkbox(graphics, L("弹幕随屏幕缩放", "Scale with screen"), 330, 382, 166, options.ScaleWithScreen, delegate { options.ScaleWithScreen = !options.ScaleWithScreen; Changed(); });
+            Checkbox(graphics, L("防挡字幕", "Avoid subtitles"), 500, 382, 106, options.AvoidSubtitles, delegate { options.AvoidSubtitles = !options.AvoidSubtitles; Changed(); });
+            CompactSlider(graphics, L("显示区域", "Area"), 417, options.Region, 10, 100, options.Region + "%", value => options.Region = value, DanmakuSettings.Regions);
+            CompactSlider(graphics, L("不透明度", "Opacity"), 451, options.Opacity, 10, 100, options.Opacity + "%", value => options.Opacity = value);
 
             string[] speedLabels = english ? new[] { "Slowest", "Slower", "Normal", "Faster", "Fastest" } : new[] { "极慢", "较慢", "适中", "较快", "极快" };
-            CompactSlider(graphics, L("弹幕速度", "Speed"), 545, options.Speed, 40, 160, speedLabels[DanmakuSettings.Index(options.Speed, DanmakuSettings.Speeds)], value => options.Speed = value, DanmakuSettings.Speeds);
-            Line(graphics, 326, 618, 600, 618);
+            CompactSlider(graphics, L("弹幕速度", "Speed"), 485, options.Speed, 40, 160, speedLabels[DanmakuSettings.Index(options.Speed, DanmakuSettings.Speeds)], value => options.Speed = value, DanmakuSettings.Speeds);
+
 
         }
         void CompactSlider(Graphics graphics, string text, float y, int value, int min, int max, string display, Action<int> apply, int[] steps = null)

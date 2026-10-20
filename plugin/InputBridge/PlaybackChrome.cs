@@ -17,8 +17,11 @@ namespace BilibiliPotPlayer
         readonly PlayerControls owner;
         readonly List<Hit> hits = new List<Hit>();
         readonly ToolTip tip = new ToolTip();
+        readonly ChromeActivity activity = new ChromeActivity();
         Bitmap bitmap;
         Rectangle video;
+        Rectangle lastVideo, lastClient;
+        bool lastSmall;
         float scale;
         bool small, controls, seeking;
         long position, duration, status, speed, mute, volume, nextFrame;
@@ -38,6 +41,7 @@ namespace BilibiliPotPlayer
         protected override void OnPaintBackground(PaintEventArgs e) { }
         protected override void WndProc(ref Message message)
         {
+            if (message.Msg == 0x8318) { owner.Mode.Toggle(); message.Result = IntPtr.Zero; return; }
             if (message.Msg == 0x84)
             {
                 Native.Point point; Native.GetCursorPos(out point);
@@ -67,11 +71,13 @@ namespace BilibiliPotPlayer
             scale = Math.Max(96, Native.GetDpiForWindow(Player)) / 96f;
             small = owner.Mode.Stage == PlayerStage.Small;
             video = ControlLayout.RelativeTo(Native.ClientBounds(Native.VideoSurface(Player)), client);
+            if (client != lastClient || video != lastVideo || small != lastSmall) nextFrame = 0;
+            lastClient = client; lastVideo = video; lastSmall = small;
             Native.Point pointer; Native.GetCursorPos(out pointer);
             IntPtr target = Native.WindowFromPoint(pointer);
             bool inside = (small ? client : ScreenVideo(client)).Contains(pointer.x, pointer.y) && Native.GetAncestor(target, 2) == Player;
             bool menu = owner.Volume.IsOver(pointer) || owner.SpeedMenu.IsOver(pointer) || owner.Streams.IsOver(Player, pointer) || owner.SubtitleMenu.IsOver(pointer);
-            bool show = inside || menu || seeking;
+            bool show = !owner.Layout.Sizing && activity.Visible(now, pointer.x, pointer.y, inside, Native.IsFullscreen(Player), menu || seeking);
             bool changed = controls != show; controls = show;
             if (now < nextFrame && !changed) { RaiseBelowMenu(); return; }
             nextFrame = now + 80;
@@ -84,18 +90,17 @@ namespace BilibiliPotPlayer
             {
                 g.Clear(Color.Transparent); g.ScaleTransform(scale, scale); g.SmoothingMode = SmoothingMode.AntiAlias;
                 float width = Width / scale, height = Height / scale;
-                if (!small && !Native.IsFullscreen(Player)) Button(g, "mode", new RectangleF(width - 99, 3, 24, 31), "mode");
                 if (controls)
                 {
                     float left = video.Left / scale, right = video.Right / scale, bottom = video.Bottom / scale;
                     row = new RectangleF(left, bottom - 44, right - left, 44);
                     seek = new RectangleF(left + 12, bottom - 62, right - left - 24, 18);
-                    using (LinearGradientBrush back = new LinearGradientBrush(new PointF(0, bottom - 98), new PointF(0, bottom), Color.Transparent, Color.FromArgb(205, 0, 0, 0))) g.FillRectangle(back, left, bottom - 98, right - left, 98);
+                    using (LinearGradientBrush back = new LinearGradientBrush(new PointF(0, bottom - 98), new PointF(0, bottom), Color.Transparent, Color.FromArgb(205, 0, 0, 0)) { WrapMode = WrapMode.TileFlipXY }) g.FillRectangle(back, left, bottom - 98, right - left, 98);
                     DrawSeek(g);
                     if (small)
                     {
                         header = new RectangleF(3, 3, width - 6, 40);
-                        using (LinearGradientBrush back = new LinearGradientBrush(new PointF(0, 3), new PointF(0, 65), Color.FromArgb(210, 0, 0, 0), Color.Transparent)) g.FillRectangle(back, 3, 3, width - 6, 62);
+                        using (LinearGradientBrush back = new LinearGradientBrush(new PointF(0, 3), new PointF(0, 65), Color.FromArgb(210, 0, 0, 0), Color.Transparent) { WrapMode = WrapMode.TileFlipXY }) g.FillRectangle(back, 3, 3, width - 6, 62);
                         Label(g, Title(), new RectangleF(14, 3, Math.Max(1, width - 158), 40), Color.White, 13);
                         Button(g, "pin", new RectangleF(width - 129, 3, 42, 40), "pin", (Native.GetWindowLong(Player, -20) & 8) != 0);
                         Button(g, "mode", new RectangleF(width - 87, 3, 42, 40), "mode");
@@ -123,7 +128,7 @@ namespace BilibiliPotPlayer
             { owner.Speed.Dismiss(); owner.Subtitles.Dismiss(); owner.Streams.Audio.Dismiss(); owner.Streams.Video.Dismiss(); }
             owner.Volume.ButtonAnchor = controls ? ScreenRect(volumeAnchor) : Rectangle.Empty;
             owner.Volume.AnchorSurface = Handle;
-            Reveal(); TimedOverlay.Present(Handle, bitmap); RaiseBelowMenu();
+            Reveal(false); TimedOverlay.Present(Handle, bitmap); RaiseBelowMenu();
         }
         Rectangle ScreenVideo(Rectangle client)
         { return new Rectangle(client.Left + video.Left, client.Top + video.Top, video.Width, video.Height); }
@@ -131,7 +136,7 @@ namespace BilibiliPotPlayer
         {
             if (!Visible) return;
             IntPtr after = owner.SubtitleMenu.Visible ? owner.SubtitleMenu.Handle : IntPtr.Zero;
-            Native.SetWindowPos(Handle, after, 0, 0, 0, 0, 0x0013);
+            if (Native.GetWindow(Handle, 3) != after) Native.SetWindowPos(Handle, after, 0, 0, 0, 0, 0x0013);
         }
         void DrawNormal(Graphics g, float left, float right)
         {

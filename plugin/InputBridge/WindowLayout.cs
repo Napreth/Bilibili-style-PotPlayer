@@ -12,7 +12,9 @@ namespace BilibiliPotPlayer
         const uint Message = 0x8317;
         readonly IntPtr player;
         IntPtr module, hook;
+        long nextAttach;
         internal bool Available { get { return hook != IntPtr.Zero && GetProp(player, "BilibiliLayout.Original") != IntPtr.Zero; } }
+        internal bool Sizing { get { return GetProp(player, "BilibiliLayout.Sizing") != IntPtr.Zero; } }
         internal WindowLayout(IntPtr player)
         {
             this.player = player;
@@ -21,29 +23,27 @@ namespace BilibiliPotPlayer
             uint pid; uint thread = Native.GetWindowThreadProcessId(player, out pid);
             SetProp(player, "BilibiliLayout.Attach", (IntPtr)1);
             hook = SetWindowsHookEx(4, GetProcAddress(module, "LayoutHook"), module, thread);
-            long unused; Native.TrySend(player, Message, 0, 0, out unused);
         }
-        internal void Update(bool small, double ratio)
+        internal void Update(double ratio)
         {
-            if (!Available) return;
+            if (hook == IntPtr.Zero) return;
             IntPtr video = Native.VideoSurface(player);
             if (video != IntPtr.Zero) while (Native.GetParent(video) != player && Native.GetParent(video) != IntPtr.Zero) video = Native.GetParent(video);
-            double scale = Math.Max(96, Native.GetDpiForWindow(player)) / 96.0;
-            IntPtr bar = Native.ControlRowWindow(player);
-            if (bar != IntPtr.Zero)
-            {
-                IntPtr parent = Native.GetParent(bar);
-                // BottomVideo's seek and buttons share a containing native layout.
-                if (parent != player && parent != IntPtr.Zero && Native.ClientBounds(parent).Height < 100 * scale) bar = parent;
-                SetProp(player, "BilibiliLayout.Bar", bar);
-            }
             if (video != IntPtr.Zero) SetProp(player, "BilibiliLayout.Video", video);
-            SetProp(player, "BilibiliLayout.Small", small ? (IntPtr)1 : IntPtr.Zero);
-            SetProp(player, "BilibiliLayout.Border", (IntPtr)(int)Math.Round(3 * scale));
-            SetProp(player, "BilibiliLayout.Top", (IntPtr)(int)Math.Round((Native.IsFullscreen(player) ? 3 : 34) * scale));
+            if (!Available)
+            {
+                if (video == IntPtr.Zero) return;
+                long now = Environment.TickCount & Int32.MaxValue;
+                if (now < nextAttach) return;
+                nextAttach = now + 500;
+                long reply; Native.TrySend(player, Message, 0, 0, out reply);
+                if (!Available) return;
+            }
             SetProp(player, "BilibiliLayout.Ratio", (IntPtr)(int)Math.Round(ratio * 100000));
             long unused; Native.TrySend(player, Message, 0, 0, out unused);
         }
+        internal void BindChrome(IntPtr window) { SetProp(player, "BilibiliLayout.Callback", window); }
+        internal static void TogglePlaylist(IntPtr player) { long unused; Native.TrySend(player, Message, 1, 0, out unused); }
         public void Dispose()
         {
             if (hook != IntPtr.Zero)

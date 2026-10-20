@@ -145,11 +145,11 @@ namespace BilibiliPotPlayer
                 if (secondary != null && !secondary.Bitmap) bottom = Captions(graphics, secondary, position, bottom, 0.9f);
                 if (main != null && !main.Bitmap) Captions(graphics, main, position, bottom, 1);
             }
-            if (!Visible) Reveal(); Present(Handle, bitmap); paintedTime = time; paintedRevision = catalog.Revision;
+            if (!Visible) Reveal(false); Present(Handle, bitmap); paintedTime = time; paintedRevision = catalog.Revision;
         }
         void RevealBelowMenus()
         {
-            Reveal();
+            Reveal(false);
             // Keep the text plane immediately above the video, below all visible interactive
             // surfaces. Raising it to HWND_TOP every frame otherwise covers paused menus.
             if (MenuWindow != IntPtr.Zero && Native.IsWindowVisible(MenuWindow)) Native.SetWindowPos(Handle, MenuWindow, 0, 0, 0, 0, 0x0013);
