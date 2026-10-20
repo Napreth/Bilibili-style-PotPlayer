@@ -125,6 +125,7 @@ namespace BilibiliPotPlayer
                 TimedText.Sort(timeline);
             }
             TextSource main = catalog.Find(catalog.Slots.Main), secondary = catalog.Find(catalog.Slots.Secondary);
+            if (!catalog.Options.SubtitlesEnabled) main = secondary = null;
             if ((main == null || main.Bitmap || main.Cues.Count == 0) && (secondary == null || secondary.Cues.Count == 0) && (!catalog.Options.DanmakuEnabled || timeline.Count == 0)) { Dismiss(); return; }
             // PotPlayer raises or recreates its video child when changing fullscreen/renderers.
             // Restore our sibling order even when a paused frame needs no repaint.
@@ -144,7 +145,7 @@ namespace BilibiliPotPlayer
                 if (secondary != null && !secondary.Bitmap) bottom = Captions(graphics, secondary, position, bottom, 0.9f);
                 if (main != null && !main.Bitmap) Captions(graphics, main, position, bottom, 1);
             }
-            if (!Visible) Reveal(); Present(bitmap); paintedTime = time; paintedRevision = catalog.Revision;
+            if (!Visible) Reveal(); Present(Handle, bitmap); paintedTime = time; paintedRevision = catalog.Revision;
         }
         void RevealBelowMenus()
         {
@@ -185,13 +186,13 @@ namespace BilibiliPotPlayer
         }
         [StructLayout(LayoutKind.Sequential)] struct Size2 { internal int Width, Height; }
         [StructLayout(LayoutKind.Sequential, Pack = 1)] struct Blend { internal byte Op, Flags, Alpha, Format; }
-        void Present(Bitmap image)
+        internal static void Present(IntPtr handle, Bitmap image)
         {
             IntPtr screen = GetDC(IntPtr.Zero), memory = CreateCompatibleDC(screen), bitmapHandle = image.GetHbitmap(Color.FromArgb(0)), previous = SelectObject(memory, bitmapHandle);
             try
             {
                 Size2 size = new Size2 { Width = image.Width, Height = image.Height }; Native.Point origin = new Native.Point(); Blend blend = new Blend { Alpha = 255, Format = 1 };
-                UpdateLayeredWindow(Handle, screen, IntPtr.Zero, ref size, memory, ref origin, 0, ref blend, 2);
+                UpdateLayeredWindow(handle, screen, IntPtr.Zero, ref size, memory, ref origin, 0, ref blend, 2);
             }
             finally { SelectObject(memory, previous); DeleteObject(bitmapHandle); DeleteDC(memory); ReleaseDC(IntPtr.Zero, screen); }
         }

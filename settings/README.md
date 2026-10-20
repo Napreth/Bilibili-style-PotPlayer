@@ -20,6 +20,8 @@
 | X | 打开 / 收起播放列表 |
 | Shift+1 / Shift+2 | 固定 1 倍速 / 2 倍速 |
 | D | 普通弹幕总开关，保留各文件的开关状态 |
+| C | 字幕总开关，保留主／副字幕选择 |
+| S | 切换小窗／正常模式 |
 | Enter（含数字键盘 Enter） | 无动作，覆盖默认全屏行为 |
 | 视频区域左键单击 | 暂停 / 播放 |
 | 视频区域左键双击 | 进入 / 退出全屏 |
@@ -48,7 +50,7 @@
 
 杜比双 D 使用[官网 SVG](https://www.dolby.com/globalassets/logo/dolby_logo_white.svg) 中的原始实心路径，资源及来源说明位于 `plugin/InputBridge/assets/`。SVG 嵌入辅助程序并按原比例绘制；标志高度和纵向位置按相邻文字实际绘出的像素计算，控制栏及选中/未选中的轨道详情均随字号、DPI 和文字颜色变化。100%、150%、200% 的预览已核对同高、同中线。
 
-每个 PotPlayer 窗口都有独立的参数与倍速控件，直接嵌入原生控制栏，参与最大化与恢复尺寸的窗口动画。控件在失焦时仍显示，并随所属播放器的窗口层级、最小化及置顶状态变化；悬浮菜单与按键操作仍只对获得焦点的播放器启用。窗口和全屏均读取原生控制栏子窗口的实际矩形，扣除底部边框后垂直居中；全屏控制栏自动隐藏时，新控件也收起。
+每个 PotPlayer 窗口都有独立的半透明控制层，嵌入播放器并参与窗口动画。正常模式下，鼠标在播放区域内时显示进度条和完整底栏，移出后隐藏；鼠标进入侧栏不会显示底栏。小窗模式下，鼠标在窗口内时显示精简顶栏、底栏及中央播放控件，移出后只保留视频。悬浮菜单与按键操作只对获得焦点的播放器启用。
 
 辅助程序不更改默认轨道标记、语言优先级或文件打开时的选轨结果，也不在文件打开后自动弹出原生轨道菜单。多轨选中状态仅在悬停时从原生菜单读取，点击列表项才发送切轨命令。在原生状态尚未读取时，参数暂用文件首条轨道显示，不强制切换播放器；不显示「音频·2 / 视频·2」等数量占位。
 
@@ -107,7 +109,7 @@ pwsh -NoProfile -File plugin/InputBridge/build.ps1 -Test
 plugin/InputBridge/bin/InputBridgeTests.exe --status
 ```
 
-第一条执行 300 项检查，覆盖按键和长按、控件布局及 DPI、Hi-Res/HDR/声道和参数格式、原生轨道菜单匹配、MP4 Dolby Vision RPU、全景元数据，以及字幕内容识别、混合弹幕分组、外部实体拒绝、时间解析、主／副选择、弹幕布局、三条轨道分页、五页滑动窗口与投放区边界、容器读取失败后重试及加载期间改分类／关闭开关、中键事件造成的延迟播放切换保护、真实左键与空格的保护解除。第二条只读取播放器状态。`--ui-status` 只读输出父窗口、层级、DPI、坐标和可见状态；`--caption-inspect "媒体文件"` 读取容器字幕列表并实际提取各文本轨道，用于验证流序号映射；`--caption-preview "输出目录"` 将常规和拖动状态绘制为 PNG，不发送鼠标或键盘事件。实体键盘长按可用暂停或播放的视频手动核对。
+第一条执行输入、媒体与布局逻辑检查，覆盖按键和长按、控件布局及 DPI、Hi-Res/HDR/声道和参数格式、原生轨道菜单匹配、MP4 Dolby Vision RPU、全景元数据，以及字幕内容识别、混合弹幕分组、外部实体拒绝、时间解析、主／副选择、弹幕布局、三条轨道分页、五页滑动窗口与投放区边界、容器读取失败后重试及加载期间改分类／关闭开关、中键事件造成的延迟播放切换保护、真实左键与空格的保护解除。第二条只读取播放器状态。`--ui-status` 只读输出父窗口、层级、DPI、坐标和可见状态；`--caption-inspect "媒体文件"` 读取容器字幕列表并实际提取各文本轨道，用于验证流序号映射；`--caption-preview "输出目录"` 将常规和拖动状态绘制为 PNG，不发送鼠标或键盘事件。实体键盘长按可用暂停或播放的视频手动核对。
 
 2026-10-14 列表与中键更新实测：正常菜单只有单行名称与页点，滚轮按每页三条轨道翻页，当前页点变白且音量不变；文件可拖到普通弹幕区并拖回存疑区，拖动状态的空位、跟随鼠标的控件和三个虚线投放区已渲染核对。实际左键单击由播放变为暂停，双击进入全屏且仍暂停，Esc 恢复窗口。360° 视频播放时中键回正后仍为 Running，暂停时回正后仍为 Paused 且进度不变。中键拖动逻辑沿用此前用户确认正常的原生旋转，新加的状态保护通过检查，实体中键拖动本轮未自动化模拟。
 
@@ -115,7 +117,7 @@ plugin/InputBridge/bin/InputBridgeTests.exe --status
 
 启动方式实测：停止辅助程序后，仅直接运行 PotPlayer `/new`，扩展成功拉起一个辅助程序，登录自启项保持不存在。辅助程序每秒检查同一 Windows 会话内的播放器实例，全部退出时结束自身。
 
-消息接口依据 [PotPlayer InternalSimpleCmd.h](https://github.com/ld3l/PotPlayerControl/blob/main/InternalSimpleCmd.h)：位置使用毫秒，速度使用千分倍率（1000 = 1x），范围为 200–12000。原生鼠标选项的键名取自 PotPlayer 程序资源。辅助程序为本项目源代码编译，源文件参数由随附的 MediaInfo 26.10 x64 库在辅助程序内读取；库及许可位于 `plugin/InputBridge/vendor/`，不注入播放器。
+消息接口依据 [PotPlayer InternalSimpleCmd.h](https://github.com/ld3l/PotPlayerControl/blob/main/InternalSimpleCmd.h)：位置使用毫秒，速度使用千分倍率（1000 = 1x），范围为 200–12000。原生鼠标选项的键名取自 PotPlayer 程序资源。辅助程序为本项目源代码编译，源文件参数由随附的 MediaInfo 26.10 x64 库在辅助程序内读取；库及许可位于 `plugin/InputBridge/vendor/`。窗口布局另使用 `plugin/InputBridge/native/PlayerLayout.dll`：通过限定播放器 UI 线程的 Windows hook 处理窗口几何，不读取播放器内部对象或修改其二进制代码。
 
 杜比视界优先于其 HLG / HDR10 兼容基础层。部分重封装 HEVC MP4 缺少 `dvcC` / `dvvC` 容器配置，MediaInfo 只能报告 HLG；`DolbyVisionProbe.cs` 对这种文件按轨道 ID 检查前 32 个样本的 RPU NAL 头及 CRC，确认元数据后显示杜比视界。普通 HLG 没有该元数据时仍显示 HLG。此补充仅支持普通 MP4 样本表，其他封装继续使用 MediaInfo；不解码图像、不调用外部程序、不修改媒体文件。RPU 格式和校验参考 [FFmpeg 帧内元数据解析](https://github.com/FFmpeg/FFmpeg/blob/master/libavcodec/dovi_rpudec.c)，HLG 兼容基础层见 [Dolby 官方说明](https://professionalsupport.dolby.com/s/article/Dolby-Vision-for-video-sharing-services-FAQs)。
 
@@ -123,7 +125,7 @@ plugin/InputBridge/bin/InputBridgeTests.exe --status
 
 浮层使用 Windows [WS_EX_NOACTIVATE](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles) 保留播放器焦点，并取消强制任务栏样式；它只在音量按钮附近显示。
 
-参数和倍速作为 Windows [子窗口](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#child-windows) 创建在原生控制栏内，让播放器的窗口动画包含这些控件；创建时使用父窗口的 [DPI 上下文](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowdpiawarenesscontext)，坐标转换为控制栏客户区坐标。常驻文字的显示状态与输入焦点分别处理，悬浮菜单仍使用拥有窗口关系并保持不抢焦点。
+控制层作为 Windows [分层子窗口](https://learn.microsoft.com/en-us/windows/win32/winmsg/using-windows#using-layered-windows) 创建在播放器内，使用逐像素透明度与统一的按钮区域；创建时匹配父窗口的 [DPI 上下文](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowdpiawarenesscontext)。画面中的字幕位于交互层和菜单下方，透明区域保留视频点击操作。
 
 字幕、弹幕画面与其菜单嵌入播放器，菜单按可用尺寸缩放；画面使用透明、可穿透鼠标的分层子窗口。`app.manifest` 声明 Windows 10 兼容性以启用[分层子窗口](https://learn.microsoft.com/en-us/windows/win32/winmsg/using-windows#using-layered-windows)。暂停时缓存画面，全屏或渲染器重建后重新保持其位于视频上方。
 
@@ -139,6 +141,10 @@ plugin/InputBridge/bin/InputBridgeTests.exe --status
 
 主菜单仅保留显示区域、不透明度、速度三条加长滑条，不再显示重复的“更多弹幕设置”文字链接；字号移入螺母设置页。字体、颜色、背景和描边扩展字段继续保存在原 JSON 中，旧设置保留。关闭彩色弹幕优先强制白色；开启后可保留源颜色或指定统一颜色。
 
-播放列表改为内缩。辅助程序等待原生窗口和视频子窗口均稳定后判断侧栏变化，防止把异步子窗口布局误认成侧栏开关而撤销用户缩放。小窗阈值使用逻辑像素：任一维度小于 1024×600 进入第一阶段，关闭侧栏、隐藏流参数；小于 800×480 进入第二阶段，只保留常用播放控件。放大后自动恢复，字幕／弹幕选轨和设置保留。两阶段收缩行为参考 B 站播放器，具体阈值以本皮肤控件布局为准。
+播放列表在外窗内部展开。布局模块在 [WM_WINDOWPOSCHANGING](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-windowposchanging) 阶段约束原生开关侧栏产生的外窗尺寸变化，避免先撑宽再恢复。小于 1024×600 逻辑像素时暂时收起并禁止展开侧栏，恢复尺寸后按记忆状态展开；正常控制栏不因侧栏关闭而切换阶段。小于 800×480 时进入小窗模式。S 或固定按钮右侧的小窗按钮可切换模式，返回时恢复至允许侧栏的最小尺寸。
 
-`InputBridgeTests.exe --layout-check` 是交互布局检查，会临时调整测试播放器尺寸、开关播放列表并恢复原窗口状态；只需读取状态时使用 `--status`。
+小窗底栏依次提供时间、字幕（C）、弹幕（D），右侧为音量、比例锁定和全屏。比例锁定先按当前视频的显示比例修正窗口，再在原生 WM_SIZING 过程中同步宽高；关闭后可自由调整窗口。标题栏只显示标题、固定、小窗切换和关闭。默认小窗视频宽约 640 逻辑像素，竖屏与较高比例会按可用高度调整。
+
+窗口布局模块随安装脚本复制到辅助程序目录，模块更新需要关闭并重新启动 PotPlayer；纯 C# 更新仍可使用 -UseConfiguredPlayer。仓库附有已编译的 x64 模块，修改其 C 源码后使用 64 位 MinGW-w64 GCC 执行 native/build.ps1 重建。
+
+`InputBridgeTests.exe --window-check` 检查侧栏开关时外窗稳定、缩放后的意图记忆、C/S 按键与视频视口，并恢复窗口状态；`--aspect-check` 在小窗比例锁定拖拽后核对实际窗口与视口。两者需要正在运行的测试播放器及辅助程序。只需读取状态时使用 `--status`。

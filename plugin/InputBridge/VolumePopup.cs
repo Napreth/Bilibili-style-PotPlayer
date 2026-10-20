@@ -16,6 +16,8 @@ namespace BilibiliPotPlayer
     {
         const int RailTop = 38, RailBottom = 118, PanelHeight = 136;
         internal IntPtr Player { get; private set; }
+        internal Rectangle ButtonAnchor { get; set; }
+        internal IntPtr AnchorSurface;
         int volume;
         bool muted, dragging;
         long lastInside, lastRead, hoverSince;
@@ -56,9 +58,9 @@ namespace BilibiliPotPlayer
         {
             Native.Point pointer;
             if (player == IntPtr.Zero || !Native.GetCursorPos(out pointer)) { Dismiss(); hoverPlayer = IntPtr.Zero; return; }
-            Rectangle button = Native.VolumeButtonBounds(player);
+            Rectangle button = ButtonAnchor;
             bool overButton = button.Contains(pointer.x, pointer.y) &&
-                Native.IsPlayerSurface(player, pointer);
+                Native.WindowFromPoint(pointer) == AnchorSurface;
             bool overPanel = Player == player && IsOver(pointer);
             if (overButton)
             {

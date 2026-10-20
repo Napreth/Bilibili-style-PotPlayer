@@ -11,6 +11,12 @@ namespace BilibiliPotPlayer
         IntPtr attachedOwner;
         readonly bool embedded;
         IntPtr embeddedParent;
+        bool virtualVisible;
+        Rectangle virtualBounds;
+        IntPtr virtualSurface;
+        internal new bool Visible { get { return virtualVisible || base.Visible; } }
+        internal void SetAnchor(IntPtr player, Rectangle bounds, IntPtr surface, bool visible)
+        { if (base.Visible) Hide(); Player = player; virtualBounds = bounds; virtualSurface = surface; virtualVisible = visible && !bounds.IsEmpty; }
         protected override bool ShowWithoutActivation { get { return true; } }
         protected override CreateParams CreateParams
         {
@@ -49,6 +55,7 @@ namespace BilibiliPotPlayer
         {
             get
             {
+                if (virtualVisible) return virtualBounds;
                 Native.Rect rect;
                 return IsHandleCreated && Native.GetWindowRect(Handle, out rect) ? Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.bottom) : Rectangle.Empty;
             }
@@ -79,6 +86,7 @@ namespace BilibiliPotPlayer
         {
             if (!Visible || !ScreenBounds.Contains(point.x, point.y)) return false;
             IntPtr target = Native.WindowFromPoint(point);
+            if (virtualVisible) return target == virtualSurface;
             return target == Handle || Native.IsChild(Handle, target);
         }
         internal IntPtr FocusedPlayer()
@@ -88,6 +96,7 @@ namespace BilibiliPotPlayer
         }
         internal void Dismiss()
         {
+            virtualVisible = false;
             if (!Visible) return;
             bool focused = Native.GetForegroundWindow() == Handle;
             Hide();
@@ -174,16 +183,15 @@ namespace BilibiliPotPlayer
         internal bool IsHoverTarget(IntPtr player, Native.Point point)
         {
             return player != IntPtr.Zero && (Player == player && IsOver(point) ||
-                Native.SpeedButtonBounds(player).Contains(point.x, point.y) &&
-                (button.Player == player && button.IsOver(point) || Native.IsPlayerSurface(player, point)));
+                button.Player == player && button.IsOver(point));
         }
         internal void UpdateHover(IntPtr player, long now)
         {
             Native.Point pointer;
-            if (player == IntPtr.Zero || !Native.GetCursorPos(out pointer)) { Dismiss(); hoverPlayer = IntPtr.Zero; return; }
-            Rectangle anchor = Native.SpeedButtonBounds(player);
+            if (player == IntPtr.Zero || !button.Visible || !Native.GetCursorPos(out pointer)) { Dismiss(); hoverPlayer = IntPtr.Zero; return; }
+            Rectangle anchor = button.ScreenBounds;
             bool overButton = anchor.Contains(pointer.x, pointer.y) &&
-                (button.Player == player && button.IsOver(pointer) || Native.IsPlayerSurface(player, pointer));
+                button.Player == player && button.IsOver(pointer);
             bool overPanel = Player == player && IsOver(pointer);
             if (overButton)
             {

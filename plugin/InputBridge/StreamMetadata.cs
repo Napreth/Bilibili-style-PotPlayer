@@ -15,6 +15,7 @@ namespace BilibiliPotPlayer
         internal bool Video, Lossless, Atmos, Interlaced;
         internal string Label = "", Codec = "", Channels = "", Spatial = "", Hdr = "";
         internal int Width, Height, Bits, SampleRate;
+        internal double DisplayRatio;
         internal double Fps;
         internal long Bitrate;
         internal bool HighResolution { get { return !Video && Lossless && Bits >= 24 && SampleRate >= 96000; } }
@@ -185,6 +186,9 @@ namespace BilibiliPotPlayer
                         if (track.Video)
                         {
                             track.Width = (int)Number(get("Width")); track.Height = (int)Number(get("Height"));
+                            double displayRatio, rotation;
+                            if (Double.TryParse(get("DisplayAspectRatio"), NumberStyles.Float, CultureInfo.InvariantCulture, out displayRatio)) track.DisplayRatio = displayRatio;
+                            if (Double.TryParse(get("Rotation"), NumberStyles.Float, CultureInfo.InvariantCulture, out rotation) && Math.Abs(rotation % 180) > 45 && Math.Abs(rotation % 180) < 135) track.DisplayRatio = track.DisplayRatio > 0 ? 1 / track.DisplayRatio : track.Width > 0 ? track.Height / (double)track.Width : 0;
                             track.Interlaced = get("ScanType").Equals("Interlaced", StringComparison.OrdinalIgnoreCase);
                             double fps; Double.TryParse(get("FrameRate"), NumberStyles.Float, CultureInfo.InvariantCulture, out fps); track.Fps = fps;
                             track.Hdr = MediaTrack.HdrName(get("HDR_Format"), get("HDR_Format_Compatibility"), get("transfer_characteristics"));

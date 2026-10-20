@@ -24,7 +24,10 @@ internal static class BridgeTests
     static int Run(string[] args)
     {
         Native.SetProcessDpiAwarenessContext((IntPtr)(-4));
-        if (args.Length > 0 && args[0] == "--layout-check") { LayoutCheck(); return 0; }
+        if (args.Length > 0 && args[0] == "--window-check") { WindowModeChecks.Run(); return 0; }
+        if (args.Length > 0 && args[0] == "--aspect-check") { WindowModeChecks.CheckAspect(); return 0; }
+        if (args.Length > 0 && args[0] == "--aspect-gesture-check") { WindowModeChecks.CheckAspectGestures(); return 0; }
+        if (args.Length > 0 && args[0] == "--layout-check") { WindowModeChecks.Run(); return 0; }
         if (args.Length > 0 && args[0] == "--status") { Status(); return 0; }
         if (args.Length > 0 && args[0] == "--ui-status") { UiStatus(); return 0; }
         if (args.Length > 1 && args[0] == "--caption-preview") { CaptionPreview(args[1]); return 0; }
@@ -116,14 +119,14 @@ internal static class BridgeTests
         Equal((TextCategory?)null, CaptionDropAreas.At(308, 100), "divider is not a drop target");
         Equal((TextCategory?)null, CaptionDropAreas.At(100, 355), "settings are not a drop target");
         Equal((TextCategory?)null, CaptionDropAreas.At(100, 20), "category header is not a drop target");
-        Equal(PlayerStage.Full, ResponsivePolicy.Stage(1100, 700, 1), "large window retains sidebar and stream controls");
-        Equal(PlayerStage.Compact, ResponsivePolicy.Stage(900, 650, 1), "narrow first stage closes the sidebar");
-        Equal(PlayerStage.Compact, ResponsivePolicy.Stage(1200, 580, 1), "short first stage also closes the sidebar");
-        Equal(PlayerStage.Minimal, ResponsivePolicy.Stage(700, 650, 1), "narrow second stage uses essential controls");
-        Equal(PlayerStage.Minimal, ResponsivePolicy.Stage(1200, 400, 1), "short second stage uses essential controls");
-        Equal(PlayerStage.Full, ResponsivePolicy.Stage(2200, 1400, 2), "responsive breakpoints use logical pixels at high DPI");
-        Equal(PlayerStage.Full, ResponsivePolicy.Stage(1024, 600, 1), "first transition returns full controls at its boundary");
-        Equal(PlayerStage.Compact, ResponsivePolicy.Stage(800, 480, 1), "second transition restores full control row at its boundary");
+        Equal(PlayerStage.Normal, ResponsivePolicy.Stage(1100, 700, 1), "large window retains sidebar and stream controls");
+        Equal(PlayerStage.Normal, ResponsivePolicy.Stage(900, 650, 1), "narrow first stage closes the sidebar");
+        Equal(PlayerStage.Normal, ResponsivePolicy.Stage(1200, 580, 1), "short first stage also closes the sidebar");
+        Equal(PlayerStage.Small, ResponsivePolicy.Stage(700, 650, 1), "narrow second stage uses essential controls");
+        Equal(PlayerStage.Small, ResponsivePolicy.Stage(1200, 400, 1), "short second stage uses essential controls");
+        Equal(PlayerStage.Normal, ResponsivePolicy.Stage(2200, 1400, 2), "responsive breakpoints use logical pixels at high DPI");
+        Equal(PlayerStage.Normal, ResponsivePolicy.Stage(1024, 600, 1), "first transition returns full controls at its boundary");
+        Equal(PlayerStage.Normal, ResponsivePolicy.Stage(800, 480, 1), "second transition restores full control row at its boundary");
         CaptionLoadingChecks();
         CameraGesture camera = new CameraGesture();
         camera.Begin(100, 100); camera.Move(105, 102); camera.End(105, 102);
@@ -148,6 +151,14 @@ internal static class BridgeTests
         Equal(KeyRoute.Blocked, InputPolicy.Route(0x43, false, true, false, false), "unlisted native shortcut is disabled");
         Equal(KeyRoute.Blocked, InputPolicy.Route(0x59, false, false, false, false), "unlisted letter is disabled");
         Equal(KeyRoute.Mapped, InputPolicy.Route(0x58, false, false, false, false), "X opens playlist");
+        Equal(KeyRoute.Mapped, InputPolicy.Route(0x43, false, false, false, false), "C toggles subtitles");
+        Equal(KeyRoute.Mapped, InputPolicy.Route(0x53, false, false, false, false), "S toggles small-window mode");
+        Equal(true, ResponsivePolicy.SidebarAllowed(1024, 600, 1), "sidebar allowed at minimum normal size");
+        Equal(false, ResponsivePolicy.SidebarAllowed(1023, 600, 1), "sidebar suppressed below width budget");
+        Equal(false, ResponsivePolicy.SidebarAllowed(1024, 599, 1), "sidebar suppressed below height budget");
+        Equal(new Size(640, 360), ResponsivePolicy.AspectSize(640, 0, 16.0 / 9, false), "width resize preserves widescreen ratio");
+        Equal(new Size(320, 240), ResponsivePolicy.AspectSize(0, 240, 4.0 / 3, true), "height resize preserves classic ratio");
+        Equal(new Size(300, 400), ResponsivePolicy.AspectSize(300, 0, .75, false), "portrait ratio remains portrait");
         Equal(KeyRoute.Blocked, InputPolicy.Route(0x58, false, true, false, false), "Ctrl X remains unlisted");
         Equal(KeyRoute.Mapped, InputPolicy.Route(0x31, true, false, false, false), "Shift 1 still mapped");
         Equal(KeyRoute.Mapped, InputPolicy.Route(0x27, false, false, false, false), "right gesture still mapped");
@@ -285,6 +296,12 @@ internal static class BridgeTests
             captions.SetMulti(true); captions.Select(a);
             Equal("b", captions.Slots.Main, "bilingual mode preserves the primary subtitle");
             Equal("a", captions.Slots.Secondary, "bilingual mode fills the secondary subtitle");
+            captions.ToggleSubtitles();
+            Equal(false, captions.Options.SubtitlesEnabled, "subtitle master switch turns captions off");
+            Equal("b", captions.Slots.Main, "subtitle master switch retains primary selection");
+            Equal("a", captions.Slots.Secondary, "subtitle master switch retains secondary selection");
+            Equal(true, captions.Options.DanmakuEnabled, "subtitle master switch does not affect danmaku");
+            captions.ToggleSubtitles(); Equal(true, captions.Options.SubtitlesEnabled, "subtitle master switch restores both selected tracks");
             TextSource c = new TextSource { Id = "c", Title = "Retry as danmaku", Category = TextCategory.Subtitle, Stream = 2, Error = "old failure" };
             captions.Sources.Add(c); captions.Classify(c, TextCategory.Danmaku); WaitCaption(captions, c);
             Equal(true, c.Enabled, "reclassifying a failed container subtitle loads and enables ordinary danmaku");

@@ -18,6 +18,7 @@ namespace BilibiliPotPlayer
         public int Region = 10, Opacity = 80, Size = 100, Speed = 100;
         public int SubtitleSize = 32, SubtitleOpacity = 100, SubtitleColor = 0xFFFFFF, SubtitleBottom = 7;
         public bool SubtitleBackground;
+        public bool SubtitlesEnabled = true;
         public bool DanmakuSpeedSync, DanmakuBold = true;
         public string DanmakuFont = "SimHei";
         public int DanmakuOutline;
@@ -118,7 +119,7 @@ namespace BilibiliPotPlayer
             if (now >= nextScan) { nextScan = now + 3000; Discover(); }
             TextSource main = Find(Slots.Main), secondary = Find(Slots.Secondary);
             EnsureLoaded(main); EnsureLoaded(secondary);
-            if (captionControlActive) SetNativeVisible(false);
+            if (captionControlActive || !Options.SubtitlesEnabled) SetNativeVisible(false);
         }
         void Discover()
         {
@@ -189,10 +190,17 @@ namespace BilibiliPotPlayer
         {
             if (source.Category != TextCategory.Subtitle || !CanUse(source)) return;
             initialSelectionDone = captionControlActive = true;
+            Options.SubtitlesEnabled = true; saveOptions();
             Slots.Select(source.Id);
             EnsureLoaded(Find(Slots.Main), true); EnsureLoaded(Find(Slots.Secondary), true); Revision++;
         }
         internal void SetMulti(bool value) { Slots.SetMulti(value); Options.Multilingual = value; saveOptions(); Revision++; }
+        internal void ToggleSubtitles()
+        {
+            Options.SubtitlesEnabled = !Options.SubtitlesEnabled;
+            if (!captionControlActive) SetNativeVisible(Options.SubtitlesEnabled);
+            saveOptions(); Revision++;
+        }
         internal void Classify(TextSource source, TextCategory category)
         {
             if (source.IntrinsicAdvanced && category != TextCategory.Advanced) { Status = "高级 / 代码弹幕暂不支持播放"; return; }

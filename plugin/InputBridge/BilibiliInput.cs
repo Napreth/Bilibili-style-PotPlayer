@@ -389,6 +389,8 @@ namespace BilibiliPotPlayer
                 else if (key == 0x1B) { if (Native.IsFullscreen(hwnd)) Native.Fullscreen(hwnd); }
                 else if (key == 0x4D) Native.ToggleMute(hwnd);
                 else if (key == 0x58) { PlayerControls owner; if (controls.TryGetValue(hwnd, out owner)) owner.Playlist.Toggle(); }
+                else if (key == 0x43) { PlayerControls subtitleOwner; if (controls.TryGetValue(hwnd, out subtitleOwner)) subtitleOwner.Captions.ToggleSubtitles(); }
+                else if (key == 0x53) { PlayerControls modeOwner; if (controls.TryGetValue(hwnd, out modeOwner)) modeOwner.Mode.Toggle(); }
                 else if (key == 0x44) { PlayerControls captionOwner; if (controls.TryGetValue(hwnd, out captionOwner)) captionOwner.SubtitleMenu.ToggleDanmaku(); }
                 else if (shift && key == 0x31) SetBaseSpeed(hwnd, 1000);
                 else if (shift && key == 0x32) SetBaseSpeed(hwnd, 2000);
@@ -450,9 +452,9 @@ namespace BilibiliPotPlayer
                 queue.Enqueue(delegate { if (videoClickPlayer != hwnd) videoClick.Cancel(); videoClickPlayer = hwnd; videoClick.Down(input.point.x, input.point.y); });
                 return (IntPtr)1;
             }
-            if (!overPopup && (msg == 0x201 || msg == 0x203) && Native.VolumeButtonBounds(hwnd).Contains(input.point.x, input.point.y))
+            if (owner == null && !overPopup && (msg == 0x201 || msg == 0x203) && Native.VolumeButtonBounds(hwnd).Contains(input.point.x, input.point.y))
             { muteMouseDown = hwnd; return (IntPtr)1; }
-            if (!overPopup && (msg == 0x201 || msg == 0x203) && Native.SpeedButtonBounds(hwnd).Contains(input.point.x, input.point.y))
+            if (owner == null && !overPopup && (msg == 0x201 || msg == 0x203) && Native.SpeedButtonBounds(hwnd).Contains(input.point.x, input.point.y))
             { speedMouseDown = true; return (IntPtr)1; }
             if (msg == 0x20A)
             {

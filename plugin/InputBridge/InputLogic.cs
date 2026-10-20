@@ -16,7 +16,7 @@ namespace BilibiliPotPlayer
             if (shift) return key == 0x31 || key == 0x32 ? KeyRoute.Mapped : KeyRoute.Blocked;
             if (key == 0x25 || key == 0x27 || key == 0x26 || key == 0x28 || key == 0x20 ||
                 key == 0xBC || key == 0xDB || key == 0xBE || key == 0xDD || key == 0x1B ||
-                key == 0x44 || key == 0x46 || key == 0x4D || key == 0x58 || key == 0x0D) return KeyRoute.Mapped;
+                key == 0x43 || key == 0x53 || key == 0x44 || key == 0x46 || key == 0x4D || key == 0x58 || key == 0x0D) return KeyRoute.Mapped;
             return KeyRoute.Blocked;
         }
     }

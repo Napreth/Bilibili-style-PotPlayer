@@ -39,7 +39,7 @@
 			#else
 				#include<TopCommon.txt>
 				#include<TopCast.txt>
-				#include<BottomVideo.txt>
+
 			#endif
 			#include<Popup.txt>
 			#if<SkinName!=WdmSkin>
@@ -74,7 +74,7 @@
 				#include<TopCommon.txt>
 				#include<RightAttach.txt>
 				#include<TopCast.txt>
-				#include<BottomVideo.txt>
+
 			#endif
 			#include<Popup.txt>
 			#if<SkinName!=WdmSkin>

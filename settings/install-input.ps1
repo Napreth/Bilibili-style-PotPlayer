@@ -25,6 +25,12 @@ if (-not $PlayerPath -or -not (Test-Path -LiteralPath $PlayerPath) -or (Split-Pa
 $PlayerPath = (Resolve-Path -LiteralPath $PlayerPath).Path
 $playerFolder = Split-Path $PlayerPath -Parent
 $runtimePath = Join-Path $playerFolder 'Extension\BilibiliInput'
+$layoutDll = Join-Path $runtimePath 'PlayerLayout.dll'
+$layoutSource = Join-Path $repoPath 'plugin\InputBridge\native\PlayerLayout.dll'
+$layoutChanged = -not (Test-Path -LiteralPath $layoutDll) -or (Get-FileHash -LiteralPath $layoutDll).Hash -ne (Get-FileHash -LiteralPath $layoutSource).Hash
+if ($playerRunning -and (Test-Path -LiteralPath $layoutDll) -and $layoutChanged) {
+    throw 'Close PotPlayer before updating its window layout module.'
+}
 $bootstrapPath = Join-Path $playerFolder 'Extension\Media\PlayParse\MediaPlayParse - BilibiliInput.as'
 if ((Test-Path -LiteralPath $bootstrapPath) -and -not (Test-Path -LiteralPath $backupPath)) {
     throw 'The input extension already exists without a restore backup.'
@@ -94,6 +100,7 @@ try {
         if ($oldInstances.Count -gt 0) { throw 'The old input bridge did not shut down cleanly.' }
     }
     Copy-Item -LiteralPath (Join-Path $repoPath 'plugin\InputBridge\bin\BilibiliInput.exe') -Destination $runtimeExe -Force
+    if ($layoutChanged) { Copy-Item -LiteralPath $layoutSource -Destination $layoutDll -Force }
     Copy-Item -LiteralPath (Join-Path $repoPath 'plugin\InputBridge\bin\MediaInfo.dll') -Destination $runtimePath -Force
     Copy-Item -LiteralPath (Join-Path $repoPath 'plugin\InputBridge\bin\MediaInfo.License.html') -Destination $runtimePath -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'input-profile.json') -Destination $runtimePath -Force

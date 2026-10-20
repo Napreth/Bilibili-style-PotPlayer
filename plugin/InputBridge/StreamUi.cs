@@ -212,7 +212,7 @@ namespace BilibiliPotPlayer
             Audio = new StreamButton(false, access); Video = new StreamButton(true, access);
             AudioPopup = new StreamPopup(Audio, access); VideoPopup = new StreamPopup(Video, access);
         }
-        internal void UpdatePlayer(IntPtr player, long now, bool barVisible)
+        internal void UpdatePlayer(IntPtr player, long now, bool barVisible, bool externalLayout = false)
         {
             metadata.UpdatePlayer(player, now); access.Tick(now);
             if (catalog != metadata.Catalog || player != IntPtr.Zero && access.Player != player)
@@ -223,6 +223,7 @@ namespace BilibiliPotPlayer
             if (now >= nextLanguageRead)
             { nextLanguageRead = now + 1000; Audio.Language = Video.Language = UiLanguage.Read(); Audio.Invalidate(); Video.Invalidate(); }
             if (player == IntPtr.Zero) { Audio.Dismiss(); Video.Dismiss(); AudioPopup.Dismiss(); VideoPopup.Dismiss(); return; }
+            if (externalLayout) return;
             float scale = Math.Max(96, Native.GetDpiForWindow(player)) / 96f;
             Rectangle speed = Native.SpeedButtonBounds(player);
             Native.Rect rect; Native.GetWindowRect(player, out rect);
