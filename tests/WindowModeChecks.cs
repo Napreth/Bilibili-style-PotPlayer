@@ -18,13 +18,13 @@ internal static class WindowModeChecks
         Native.SetWindowPos(player, IntPtr.Zero, 40, 70, width, height, 0x0014); Wait(300);
     }
     static void Key(IntPtr player, byte key) { Native.SetForegroundWindow(player); Wait(100); keybd_event(key, 0, 0, UIntPtr.Zero); Wait(30); keybd_event(key, 0, 2, UIntPtr.Zero); Wait(350); }
-    static void Open(IntPtr player, bool value) { if (Property(player, "Intent") != value) WindowLayout.TogglePlaylist(player); Wait(200); }
+    static void Open(IntPtr player, bool value) { if (Property(player, Property(player, "Full") ? "FullIntent" : "Intent") != value) WindowLayout.TogglePlaylist(player); Wait(200); }
     static void CheckPlaylist(IntPtr player, string mode)
     {
         IntPtr pane = GetProp(player, "BilibiliLayout.Sidebar"), list = GetProp(player, "BilibiliLayout.Playlist");
         Check(pane != IntPtr.Zero && list != IntPtr.Zero && Native.IsWindowVisible(pane) && Native.IsWindowVisible(list), mode + ": the actual playlist control is visible");
         Rectangle sidebar = Bounds(pane), rows = Bounds(list), video = Native.ClientBounds(Native.VideoSurface(player));
-        Check(sidebar.Contains(rows) && rows.Width > 100 && rows.Height > 50 && video.Right <= sidebar.Left, mode + ": playlist rows occupy the reserved area beside the video");
+        Check(sidebar.Contains(rows) && rows.Width > 100 && rows.Height > 50 && video.Right == sidebar.Left, mode + ": playlist rows touch the viewport without a separator strip");
         Native.Point point = new Native.Point { x = rows.Left + rows.Width / 2, y = rows.Top + 10 };
         IntPtr target = Native.WindowFromPoint(point);
         Check(target == list || Native.IsChild(list, target), mode + ": playlist rows receive mouse input");
@@ -69,16 +69,40 @@ internal static class WindowModeChecks
             Size(player, 1100, 700);
             Key(player, 0x46); Check(Native.IsFullscreen(player), "normal window enters fullscreen");
             Native.Point pointerBefore, pointerAfter; Native.GetCursorPos(out pointerBefore);
+            Native.Rect clipBefore, clipAfter; GetClipCursor(out clipBefore);
             Open(player, true); Native.GetCursorPos(out pointerAfter);
+            GetClipCursor(out clipAfter);
             Rectangle fullClient = Native.ClientBounds(player), fullVideo = Native.ClientBounds(Native.VideoSurface(player));
             Check(PlaylistLayout.IsOpen(player) && fullVideo.Width < fullClient.Width - 100, "fullscreen sidebar reduces the playback width");
             CheckPlaylist(player, "fullscreen");
             Check(pointerBefore.x == pointerAfter.x && pointerBefore.y == pointerAfter.y, "opening the fullscreen sidebar never moves the pointer");
+            Check(clipBefore.left == clipAfter.left && clipBefore.top == clipAfter.top && clipBefore.right == clipAfter.right && clipBefore.bottom == clipAfter.bottom, "fullscreen playlist initialization restores the original pointer bounds");
             Open(player, false); fullVideo = Native.ClientBounds(Native.VideoSurface(player));
             Check(fullVideo.Width == fullClient.Width, "closing the fullscreen sidebar restores the whole playback area");
             Native.SetCursorPos(fullClient.Right - 1, fullClient.Top + fullClient.Height / 2); Wait(1800);
             Check(!Property(player, "Open") && !Property(player, "Intent"), "hovering at the fullscreen right edge does not open the sidebar");
             Key(player, 0x1B);
+            Open(player, true); Rectangle beforeFullscreen = Bounds(player); Key(player, 0x46);
+            Check(!Property(player, "Open") && Property(player, "Intent"), "entering fullscreen suppresses the sidebar without losing windowed intent");
+            Check(!Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Sidebar")), "automatically suppressed fullscreen sidebar is actually hidden");
+            Key(player, 0x1B);
+            Check(Bounds(player) == beforeFullscreen, "automatic fullscreen suppression preserves the window's restore bounds");
+            Check(Property(player, "Open"), "leaving fullscreen restores the previously open windowed sidebar");
+            Open(player, false); Key(player, 0x46); Key(player, 0x58);
+            Check(Property(player, "Open") && Property(player, "Intent"), "explicitly opening the fullscreen sidebar also updates windowed intent");
+            Key(player, 0x1B);
+            Check(Bounds(player) == beforeFullscreen, "opening the fullscreen sidebar preserves the window's restore bounds");
+            Check(Property(player, "Open"), "a sidebar explicitly opened in fullscreen remains open in the window");
+            Key(player, 0x46); Key(player, 0x58); Key(player, 0x58);
+            Check(!Property(player, "Open") && !Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Sidebar")), "X closes the real fullscreen sidebar after opening it");
+            Key(player, 0x1B);
+            Check(!Property(player, "Open") && !Property(player, "Intent"), "explicit fullscreen closure is remembered when returning to the window");
+            long unused; Native.TrySend(player, 0x112, 0xF030, 0, out unused); Wait(300);
+            Open(player, true); Rectangle maximized = Bounds(player); Key(player, 0x46);
+            Check(!Property(player, "Open") && Property(player, "Intent"), "entering fullscreen from a maximized window also suppresses the sidebar");
+            Key(player, 0x1B);
+            Check(Bounds(player) == maximized && Property(player, "Open"), "leaving fullscreen restores maximized bounds and the remembered sidebar (before " + maximized + ", after " + Bounds(player) + ", open " + Property(player, "Open") + ")");
+            Size(player, 1100, 700);
             Open(player, true); Key(player, 0x53);
             Rectangle client = Native.ClientBounds(player), video = Native.ClientBounds(Native.VideoSurface(player));
             Check(Property(player, "Small") && client.Width < 800 && !Property(player, "Open") && Property(player, "Intent"), "S enters small-window mode and retains sidebar intent");
@@ -87,15 +111,97 @@ internal static class WindowModeChecks
             Check(after.SubtitlesEnabled != before.SubtitlesEnabled, "C toggles subtitle visibility");
             Check(after.DanmakuEnabled == before.DanmakuEnabled, "C does not change danmaku visibility");
             Key(player, 0x43); Key(player, 0x53); client = Native.ClientBounds(player);
-            Check(!Property(player, "Small") && client.Width == 1024 && client.Height == 600, "S restores the minimum normal size that permits a sidebar");
+            Check(!Property(player, "Small") && client.Width == 1024 && client.Height == 540, "S restores the minimum normal size that permits a sidebar");
             Check(Property(player, "Open") && PlaylistLayout.IsOpen(player), "S restores the remembered sidebar");
             Console.WriteLine("PASS: " + checks + " live window checks");
         }
         finally
         {
+            if (Native.IsFullscreen(player)) Key(player, 0x1B);
             Size(player, Math.Max(1024, original.Width), Math.Max(600, original.Height)); Open(player, wanted);
             Native.SetWindowPos(player, IntPtr.Zero, original.X, original.Y, original.Width, original.Height, 0x0014);
         }
+    }
+    // Run with a plain white 16:9 video. HWND visibility alone cannot detect
+    // stale sidebar pixels or an unchanged renderer output rectangle.
+    internal static void CheckSidebarPixels()
+    {
+        IntPtr player = Native.PlayerWindows()[0];
+        if (Native.IsFullscreen(player)) Key(player, 0x1B);
+        Native.Set(player, Native.SetPlayStatus, 1); Native.Set(player, Native.SetPosition, 1000);
+        Size(player, 1100, 700); Open(player, false);
+        for (int mode = 0; mode < 2; mode++)
+        {
+            if (mode == 1) Key(player, 0x46);
+            string label = mode == 0 ? "windowed" : "fullscreen";
+            for (int i = 0; i < 3; i++)
+            {
+                Key(player, 0x58); CheckPlaylist(player, label + " pixel check open " + (i + 1));
+                Rectangle openedVideo = Native.ClientBounds(Native.VideoSurface(player));
+                Check(!Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Splitter")), label + ": the native splitter cannot paint video-colored pixels");
+                int bar = (openedVideo.Height - openedVideo.Width * 9 / 16) / 2;
+                using (Bitmap column = new Bitmap(1, openedVideo.Height))
+                {
+                    using (Graphics g = Graphics.FromImage(column)) g.CopyFromScreen(openedVideo.Left + openedVideo.Width / 2, openedVideo.Top, 0, 0, column.Size);
+                    Color top = column.GetPixel(0, bar / 2), bottom = column.GetPixel(0, openedVideo.Height - bar / 2 - 1);
+                    Check(top.R < 20 && top.G < 20 && top.B < 20 && bottom.R < 20 && bottom.G < 20 && bottom.B < 20, label + ": opening the sidebar scales the picture to its narrower viewport " + (i + 1) + " (top " + top + ", bottom " + bottom + ", reflows " + GetProp(player, "BilibiliLayout.ReflowCount") + ", initializations " + GetProp(player, "BilibiliLayout.SidebarInitializedCount") + ")");
+                    Color middle = column.GetPixel(0, openedVideo.Height / 2);
+                    Check(middle.R > 235 && middle.G > 235 && middle.B > 235, label + ": the scaled picture is rendered " + (i + 1));
+                }
+                using (Bitmap row = new Bitmap(openedVideo.Width, 1))
+                {
+                    using (Graphics g = Graphics.FromImage(row)) g.CopyFromScreen(openedVideo.Left, openedVideo.Top + openedVideo.Height / 2, 0, 0, row.Size);
+                    bool uninterrupted = true;
+                    for (int x = 2; x < row.Width; x++) { Color color = row.GetPixel(x, 0); uninterrupted &= color.R > 235 && color.G > 235 && color.B > 235; }
+                    Check(uninterrupted, label + ": no black column interrupts the open-sidebar picture " + (i + 1));
+                }
+                int seam = Bounds(GetProp(player, "BilibiliLayout.Sidebar")).Left - 2;
+                Native.Point pointer; Native.GetCursorPos(out pointer);
+                Key(player, 0x58); Wait(700);
+                Native.Point after; Native.GetCursorPos(out after);
+                Check(pointer.x == after.x && pointer.y == after.y, label + " close preserves the pointer " + (i + 1));
+                Check(!Property(player, "Open") && !Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Sidebar")), label + " pane is hidden " + (i + 1));
+                Rectangle client = Native.ClientBounds(player), video = Native.ClientBounds(Native.VideoSurface(player));
+                Check(video.Width == client.Width - 2 * GetProp(player, "BilibiliLayout.Border").ToInt32(), label + " viewport expands after closing " + (i + 1));
+                using (Bitmap row = new Bitmap(client.Width, 1))
+                {
+                    using (Graphics g = Graphics.FromImage(row)) g.CopyFromScreen(client.Left, client.Top + client.Height / 2, 0, 0, row.Size);
+                    bool white = true;
+                    for (int x = seam - client.Left - 3; x <= seam - client.Left + 3; x++)
+                    { Color color = row.GetPixel(x, 0); white &= color.R > 235 && color.G > 235 && color.B > 235; }
+                    Check(white, label + ": no black seam remains at the former sidebar edge " + (i + 1));
+                    Color right = row.GetPixel(client.Width - 80, 0);
+                    Check(right.R > 235 && right.G > 235 && right.B > 235, label + ": video replaces the former sidebar pixels " + (i + 1));
+                }
+            }
+        }
+        Key(player, 0x1B);
+        Console.WriteLine("PASS: " + checks + " sidebar pixel checks");
+    }
+    internal static void CheckSidebarResize()
+    {
+        IntPtr player = Native.PlayerWindows()[0];
+        if (Native.IsFullscreen(player)) Key(player, 0x1B);
+        double scale = Math.Max(96, Native.GetDpiForWindow(player)) / 96.0;
+        for (int pass = 0; pass < 3; pass++)
+        {
+            Size(player, (int)(1100 * scale), (int)(700 * scale)); Open(player, true);
+            long unused; Native.TrySend(player, 0x231, 0, 0, out unused);
+            try
+            {
+                foreach (Size target in new[] {new Size(1100, 620), new Size(1100, 560), new Size(1100, 540), new Size(1100, 539), new Size(1100, 500), new Size(1100, 470), new Size(1100, 560), new Size(1024, 560), new Size(1023, 560), new Size(790, 560), new Size(1100, 560)})
+                {
+                    Native.SetWindowPos(player, IntPtr.Zero, 40, 70, (int)(target.Width * scale), (int)(target.Height * scale), 0x0014); Wait(40);
+                    Rectangle client = Native.ClientBounds(player);
+                    bool allowed = ResponsivePolicy.SidebarAllowed(client.Width, client.Height, scale);
+                    Check(Property(player, "Open") == allowed && Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Sidebar")) == allowed, "resize " + (pass + 1) + ": actual sidebar visibility follows " + target);
+                    Check(Property(player, "Intent"), "automatic resize suppression retains explicit open intent");
+                }
+            }
+            finally { Native.TrySend(player, 0x232, 0, 0, out unused); Wait(200); }
+            CheckPlaylist(player, "after resize gesture " + (pass + 1));
+        }
+        Console.WriteLine("PASS: " + checks + " sidebar resize checks");
     }
     internal static void CheckAspect()
     {
@@ -200,9 +306,23 @@ internal static class WindowModeChecks
         Native.Point pointer; Native.GetCursorPos(out pointer); Native.SetCursorPos(pointer.x + 10, pointer.y); Wait(200);
         Check(Native.WindowFromPoint(control) == chrome, "moving the mouse reveals fullscreen controls again");
         Key(player, 0x1B);
+        client = Native.ClientBounds(player);
+        Native.SetCursorPos(client.Left + client.Width / 2, client.Top + client.Height / 2); Wait(300);
+        control = new Native.Point { x = client.Left + 20, y = client.Bottom - 20 };
+        Check(Native.WindowFromPoint(control) == chrome, "normal window mouse movement shows the controls");
+        Wait(3200);
+        Check(Native.WindowFromPoint(control) != chrome, "normal window controls disappear after the mouse stays still");
+        Native.GetCursorPos(out pointer); Native.SetCursorPos(pointer.x + 10, pointer.y); Wait(200);
+        Check(Native.WindowFromPoint(control) == chrome, "moving the mouse reveals normal window controls again");
+        Key(player, 0x53); client = Native.ClientBounds(player);
+        Native.SetCursorPos(client.Left + client.Width / 2, client.Top + client.Height / 2); Wait(3200);
+        control = new Native.Point { x = client.Left + 20, y = client.Bottom - 20 };
+        Check(Native.WindowFromPoint(control) == chrome, "small-window controls remain visible while the stationary pointer is inside");
+        Key(player, 0x53);
         Console.WriteLine("PASS: " + checks + " chrome and resize checks");
     }
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int count);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetProp(IntPtr window, string name);
+    [DllImport("user32.dll")] static extern bool GetClipCursor(out Native.Rect rect);
     [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
 }

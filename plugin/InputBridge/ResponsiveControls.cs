@@ -10,7 +10,7 @@ namespace BilibiliPotPlayer
         internal static PlayerStage Stage(int width, int height, double scale)
         { return width / Math.Max(.5, scale) < 800 || height / Math.Max(.5, scale) < 480 ? PlayerStage.Small : PlayerStage.Normal; }
         internal static bool SidebarAllowed(int width, int height, double scale)
-        { return width / Math.Max(.5, scale) >= 1024 && height / Math.Max(.5, scale) >= 600; }
+        { return width / Math.Max(.5, scale) >= 1024 && height / Math.Max(.5, scale) >= 540; }
         internal static Size AspectSize(int width, int height, double ratio, bool fromHeight)
         {
             ratio = Math.Max(.1, Math.Min(10, ratio));
@@ -44,7 +44,7 @@ namespace BilibiliPotPlayer
             bool restore = Stage == PlayerStage.Small;
             double scale = Math.Max(96, Native.GetDpiForWindow(player)) / 96.0;
             Rectangle work = Screen.FromHandle(player).WorkingArea;
-            Size size = restore ? new Size((int)(1024 * scale), (int)(600 * scale)) : ResponsivePolicy.AspectSize((int)(640 * scale), 0, Ratio, false);
+            Size size = restore ? new Size((int)(1024 * scale), (int)(540 * scale)) : ResponsivePolicy.AspectSize((int)(640 * scale), 0, Ratio, false);
             if (!restore && size.Height > 440 * scale) size = ResponsivePolicy.AspectSize(0, (int)(440 * scale), Ratio, true);
             if (!restore) { size.Width = Math.Max((int)(320 * scale), size.Width + (int)(6 * scale)); size.Height += (int)(6 * scale); }
             Native.Rect bounds; Native.GetWindowRect(player, out bounds);

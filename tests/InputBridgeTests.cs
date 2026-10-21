@@ -28,6 +28,8 @@ internal static class BridgeTests
         if (args.Length > 0 && args[0] == "--aspect-check") { WindowModeChecks.CheckAspect(); return 0; }
         if (args.Length > 0 && args[0] == "--aspect-gesture-check") { WindowModeChecks.CheckAspectGestures(); return 0; }
         if (args.Length > 0 && args[0] == "--chrome-check") { WindowModeChecks.CheckChromeGestures(); return 0; }
+        if (args.Length > 0 && args[0] == "--sidebar-pixel-check") { WindowModeChecks.CheckSidebarPixels(); return 0; }
+        if (args.Length > 0 && args[0] == "--sidebar-resize-check") { WindowModeChecks.CheckSidebarResize(); return 0; }
         if (args.Length > 0 && args[0] == "--layout-check") { WindowModeChecks.Run(); return 0; }
         if (args.Length > 0 && args[0] == "--status") { Status(); return 0; }
         if (args.Length > 0 && args[0] == "--ui-status") { UiStatus(); return 0; }
@@ -136,7 +138,12 @@ internal static class BridgeTests
         Equal(true, chrome.Visible(7000, 11, 20, true, true, true), "open menus keep fullscreen controls visible");
         Equal(false, chrome.Visible(7100, 11, 20, false, true, false), "leaving the player hides controls immediately");
         Equal(true, chrome.Visible(7200, 11, 20, true, true, false), "reentering the player resets the idle deadline");
-        Equal(true, chrome.Visible(20000, 11, 20, true, false, false), "windowed hover does not time out");
+        Equal(false, chrome.Visible(20000, 11, 20, true, true, false), "normal window controls also time out");
+        Equal(true, chrome.Visible(21000, 12, 20, true, true, false), "movement reveals normal window controls");
+        Equal(false, chrome.Visible(24000, 12, 20, true, true, false), "normal window controls hide after three idle seconds");
+        Equal(true, chrome.Visible(25000, 12, 20, true, false, false), "entering small mode reveals its hover controls");
+        Equal(true, chrome.Visible(50000, 12, 20, true, false, false), "small window hover does not time out");
+        Equal(false, chrome.Visible(50100, 12, 20, false, false, false), "small window controls hide when the pointer leaves");
         CaptionLoadingChecks();
         CameraGesture camera = new CameraGesture();
         camera.Begin(100, 100); camera.Move(105, 102); camera.End(105, 102);
@@ -163,9 +170,12 @@ internal static class BridgeTests
         Equal(KeyRoute.Mapped, InputPolicy.Route(0x58, false, false, false, false), "X opens playlist");
         Equal(KeyRoute.Mapped, InputPolicy.Route(0x43, false, false, false, false), "C toggles subtitles");
         Equal(KeyRoute.Mapped, InputPolicy.Route(0x53, false, false, false, false), "S toggles small-window mode");
-        Equal(true, ResponsivePolicy.SidebarAllowed(1024, 600, 1), "sidebar allowed at minimum normal size");
+        Equal(true, ResponsivePolicy.SidebarAllowed(1024, 540, 1), "sidebar allowed at its lower height boundary");
+        Equal(false, ResponsivePolicy.SidebarAllowed(1024, 539, 1), "sidebar suppressed below its height boundary");
+        Equal(true, ResponsivePolicy.SidebarAllowed(1536, 810, 1.5), "sidebar height boundary scales with DPI");
+        Equal(false, ResponsivePolicy.SidebarAllowed(1536, 809, 1.5), "scaled height below the boundary suppresses the sidebar");
         Equal(false, ResponsivePolicy.SidebarAllowed(1023, 600, 1), "sidebar suppressed below width budget");
-        Equal(false, ResponsivePolicy.SidebarAllowed(1024, 599, 1), "sidebar suppressed below height budget");
+        Equal(true, ResponsivePolicy.SidebarAllowed(1024, 599, 1), "sidebar remains available below the former height boundary");
         Equal(new Size(640, 360), ResponsivePolicy.AspectSize(640, 0, 16.0 / 9, false), "width resize preserves widescreen ratio");
         Equal(new Size(320, 240), ResponsivePolicy.AspectSize(0, 240, 4.0 / 3, true), "height resize preserves classic ratio");
         Equal(new Size(300, 400), ResponsivePolicy.AspectSize(300, 0, .75, false), "portrait ratio remains portrait");
@@ -416,7 +426,7 @@ internal static class BridgeTests
             Native.GetWindowRect(player, out openBounds); Equal(closedBounds.right-closedBounds.left, openBounds.right-openBounds.left, "native playlist action also preserves outer width");
             resize(900,650); snapshot("compact"); Equal(false, PlaylistLayout.IsOpen(player), "compact width automatically closes playlist");
             layout.Toggle(); Thread.Sleep(200); Equal(false, PlaylistLayout.IsOpen(player), "compact window prevents opening an unusable sidebar");
-            resize(1180,550); snapshot("compact-height"); Equal(false, PlaylistLayout.IsOpen(player), "short window also keeps sidebar closed");
+            resize(1180,530); snapshot("compact-height"); Equal(false, PlaylistLayout.IsOpen(player), "short window also keeps sidebar closed");
             resize(1180,400); snapshot("minimal-height"); Equal(true, HasSurface(player,"简洁播放控件"), "short height exposes essential controls independently of width");
             resize(700,400); snapshot("minimal");
             Equal(true, HasSurface(player,"简洁播放控件"), "minimal window exposes essential controls");

@@ -4,16 +4,16 @@ namespace BilibiliPotPlayer
 {
     internal sealed class ChromeActivity
     {
-        internal const int FullscreenIdleMilliseconds = 3000;
-        bool initialized, wasInside, wasFullscreen;
+        internal const int IdleMilliseconds = 3000;
+        bool initialized, wasInside, wasTimed;
         int x, y;
         long moved;
-        internal bool Visible(long now, int px, int py, bool inside, bool fullscreen, bool interacting)
+        internal bool Visible(long now, int px, int py, bool inside, bool timed, bool interacting)
         {
-            if (!initialized || px != x || py != y || inside && !wasInside || fullscreen != wasFullscreen) moved = now;
-            initialized = true; x = px; y = py; wasInside = inside; wasFullscreen = fullscreen;
+            if (!initialized || px != x || py != y || inside && !wasInside || timed != wasTimed) moved = now;
+            initialized = true; x = px; y = py; wasInside = inside; wasTimed = timed;
             if (interacting) { moved = now; return true; }
-            return inside && (!fullscreen || now - moved < FullscreenIdleMilliseconds);
+            return inside && (!timed || now - moved < IdleMilliseconds);
         }
     }
     internal enum KeyRoute { Native, Mapped, Blocked }

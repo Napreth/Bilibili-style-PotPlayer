@@ -5,9 +5,10 @@
 #include <stdlib.h>
 
 /* Decide geometry on the player's UI thread, before a native child is shown.
-   The sidebar has one intent independent of native fullscreen/hover layouts. */
+   Automatic fullscreen suppression preserves the last explicit sidebar choice. */
 #define MSG_LAYOUT (WM_APP + 0x317)
 #define MSG_SMALL (WM_APP + 0x318)
+#define MSG_REFLOW (WM_APP + 0x319)
 /* Reserve the unused window-centering skin command for the small-window button.
    PotPlayer resolves named CmdIDs; arbitrary numeric skin commands are ignored. */
 #define CMD_SMALL 10377
@@ -23,6 +24,7 @@ static void RestoreWindow(HWND child)
 static int Value(HWND h, LPCWSTR key) { return (int)(INT_PTR)GetPropW(h, key); }
 static void Put(HWND h, LPCWSTR key, int n) { SetPropW(h, key, (HANDLE)(INT_PTR)n); }
 static void Count(HWND h, LPCWSTR key) { Put(h, key, Value(h, key) + 1); }
+static int Requested(HWND h) { return Value(h, Value(h, PROP(L"Full")) ? PROP(L"FullIntent") : PROP(L"Intent")); }
 static int Fullscreen(HWND h)
 {
     RECT r; MONITORINFO m = {sizeof(m)};
@@ -34,23 +36,31 @@ static void Policy(HWND h)
     RECT r; GetClientRect(h, &r);
     int dpi = GetDpiForWindow(h), full = Fullscreen(h);
     int small = !full && (r.right * 96 < 800 * dpi || r.bottom * 96 < 480 * dpi);
-    int allowed = full || (!small && r.right * 96 >= 1024 * dpi && r.bottom * 96 >= 600 * dpi);
+    int allowed = full || (!small && r.right * 96 >= 1024 * dpi && r.bottom * 96 >= 540 * dpi);
+    if (full && !Value(h, PROP(L"Full"))) Put(h, PROP(L"FullIntent"), 0);
     Put(h, PROP(L"Small"), small); Put(h, PROP(L"Full"), full);
     Put(h, PROP(L"Border"), full ? 0 : MulDiv(3, dpi, 96));
     Put(h, PROP(L"Top"), small || full ? Value(h, PROP(L"Border")) : MulDiv(34, dpi, 96));
     Put(h, PROP(L"AllowSidebar"), allowed);
-    Put(h, PROP(L"Open"), allowed && Value(h, PROP(L"Intent")) && Value(h, PROP(L"SidebarReady")));
+    Put(h, PROP(L"Open"), allowed && Requested(h) && Value(h, PROP(L"SidebarReady")));
+}
+static void ToggleSidebar(HWND h)
+{
+    Policy(h);
+    if (!Value(h, PROP(L"AllowSidebar")) || Value(h, PROP(L"Sizing"))) return;
+    int requested = !Requested(h);
+    if (Value(h, PROP(L"Full"))) Put(h, PROP(L"FullIntent"), requested);
+    Put(h, PROP(L"Intent"), requested);
 }
 static RECT Area(HWND h, int role)
 {
     RECT r; GetClientRect(h, &r);
     int border = Value(h, PROP(L"Border")), width = Value(h, PROP(L"SidebarWidth"));
     if (!width) width = MulDiv(314, GetDpiForWindow(h), 96);
-    int split = MulDiv(3, GetDpiForWindow(h), 96);
     r.bottom -= border; r.top = Value(h, PROP(L"Top"));
-    if (role == VIDEO) { r.left = border; r.right -= border + (Value(h, PROP(L"Open")) ? width + split : 0); }
+    if (role == VIDEO) { r.left = border; r.right -= border + (Value(h, PROP(L"Open")) ? width : 0); }
     else if (role == SIDEBAR) { r.right -= border; r.left = r.right - width; }
-    else if (role == SPLITTER) { r.right -= border + width; r.left = r.right - split; }
+    else if (role == SPLITTER) { r.right -= border + width; r.left = r.right; }
     return r;
 }
 static void AttachChild(HWND h, HWND child, int role)
@@ -112,25 +122,41 @@ static int ContentReady(HWND h, HWND list)
     }
     return 1;
 }
-static void PrepareSidebar(HWND h)
+static void NativeCommand(HWND h, int command)
 {
-    if (!Value(h, PROP(L"Intent")) || !Value(h, PROP(L"AllowSidebar"))) return;
-    EnumChildWindows(h, FindPlaylist, (LPARAM)h);
-    HWND list = (HWND)GetPropW(h, PROP(L"Playlist"));
-    if (ContentReady(h, list)) {
-        Put(h, PROP(L"SidebarReady"), 1); return;
-    }
     WNDPROC original = (WNDPROC)GetPropW(h, PROP(L"Original"));
     if (!original) return;
     RECT bounds; GetWindowRect(h, &bounds);
     Put(h, PROP(L"FrozenWidth"), bounds.right - bounds.left); Put(h, PROP(L"FrozenHeight"), bounds.bottom - bounds.top);
     Put(h, PROP(L"Freeze"), 1);
-    HWND focus = GetFocus();
-    /* Select the native playlist tab: this initializes its real child controls
-       without the toggle command's fullscreen cursor warp. */
-    CallWindowProcW(original, h, WM_COMMAND, 20052, 0);
+    /* Native playlist show commands center the fullscreen pointer. Constrain
+       that synchronous call at its existing position, then restore the caller's
+       clipping rectangle; never move the pointer back after a visible jump. */
+    RECT clip; POINT pointer;
+    int retainPointer = command == 20052 && Fullscreen(h) && GetClipCursor(&clip) && GetCursorPos(&pointer);
+    if (retainPointer) {
+        RECT point = {pointer.x, pointer.y, pointer.x + 1, pointer.y + 1};
+        retainPointer = ClipCursor(&point);
+    }
+    HWND focus = GetFocus(); Count(h, PROP(L"NativeDepth"));
+    CallWindowProcW(original, h, WM_COMMAND, command, 0);
+    Put(h, PROP(L"NativeDepth"), Value(h, PROP(L"NativeDepth")) - 1);
     if (IsWindow(focus)) SetFocus(focus);
+    if (retainPointer) ClipCursor(&clip);
     RemovePropW(h, PROP(L"Freeze"));
+}
+static void PrepareSidebar(HWND h)
+{
+    /* Native panes can be recreated after a file or display-mode change. Bind
+       their replacements even while suppressed, so they cannot escape hiding. */
+    EnumChildWindows(h, FindPlaylist, (LPARAM)h);
+    if (!Requested(h) || !Value(h, PROP(L"AllowSidebar"))) return;
+    HWND list = (HWND)GetPropW(h, PROP(L"Playlist"));
+    if (ContentReady(h, list)) {
+        Put(h, PROP(L"SidebarReady"), 1); return;
+    }
+    /* Select the native playlist tab to initialize its real child controls. */
+    NativeCommand(h, 20052);
     EnumChildWindows(h, FindPlaylist, (LPARAM)h);
     list = (HWND)GetPropW(h, PROP(L"Playlist"));
     Put(h, PROP(L"SidebarReady"), ContentReady(h, list));
@@ -161,10 +187,32 @@ static void Apply(HWND h)
     if (previous != video) { RestoreWindow(previous); SetPropW(h, PROP(L"VideoHooked"), video); }
     AttachChild(h, video, VIDEO);
     PrepareSidebar(h); Policy(h);
+    int open = Value(h, PROP(L"Open"));
+    int changed = !Value(h, PROP(L"NativeSynced")) || Value(h, PROP(L"NativeOpen")) != open;
+    if (changed) {
+        /* Showing/hiding the HWND alone leaves the native renderer's reserved
+           sidebar area and cached pixels intact, especially in fullscreen. */
+        Put(h, PROP(L"NativeSynced"), 1); Put(h, PROP(L"NativeOpen"), open);
+        NativeCommand(h, open ? 20052 : 20049);
+    }
     Place(h, PROP(L"Header"), HEADER, !Value(h, PROP(L"Small")) && !Value(h, PROP(L"Full")));
     Place(h, PROP(L"Sidebar"), SIDEBAR, Value(h, PROP(L"Open")));
-    Place(h, PROP(L"Splitter"), SPLITTER, Value(h, PROP(L"Open")));
-    Place(h, PROP(L"Video"), VIDEO, 1); RemovePropW(h, PROP(L"Applying"));
+    /* Its skin samples cached video pixels, producing a colored vertical strip.
+       The video meets the playlist directly; no splitter surface is exposed. */
+    Place(h, PROP(L"Splitter"), SPLITTER, 0);
+    Place(h, PROP(L"Video"), VIDEO, 1);
+    RECT viewport = Area(h, VIDEO);
+    int geometryChanged = (HWND)GetPropW(h, PROP(L"LastVideo")) != video ||
+        Value(h, PROP(L"ViewX")) != viewport.left || Value(h, PROP(L"ViewY")) != viewport.top ||
+        Value(h, PROP(L"ViewWidth")) != viewport.right - viewport.left || Value(h, PROP(L"ViewHeight")) != viewport.bottom - viewport.top;
+    SetPropW(h, PROP(L"LastVideo"), video);
+    Put(h, PROP(L"ViewX"), viewport.left); Put(h, PROP(L"ViewY"), viewport.top);
+    Put(h, PROP(L"ViewWidth"), viewport.right - viewport.left); Put(h, PROP(L"ViewHeight"), viewport.bottom - viewport.top);
+    if (changed || geometryChanged) Put(h, PROP(L"NeedsReflow"), 1);
+    if (Value(h, PROP(L"NeedsReflow")) && !Value(h, PROP(L"Sizing")) && !Value(h, PROP(L"ReflowQueued"))) {
+        Put(h, PROP(L"ReflowQueued"), 1); PostMessageW(h, MSG_REFLOW, 0, 0);
+    }
+    RemovePropW(h, PROP(L"Applying"));
 }
 static LRESULT CALLBACK ChildProc(HWND child, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -178,7 +226,7 @@ static LRESULT CALLBACK ChildProc(HWND child, UINT msg, WPARAM wp, LPARAM lp)
         if (role == VIDEO && (child != (HWND)GetPropW(h, PROP(L"Video")) || (p->flags & SWP_HIDEWINDOW) ||
             (Value(h, PROP(L"NativeDepth")) && !Value(h, PROP(L"NativeLayout")))))
             return CallWindowProcW(original, child, msg, wp, lp);
-        int show = role == VIDEO || (role == HEADER ? !Value(h, PROP(L"Small")) && !Value(h, PROP(L"Full")) : Value(h, PROP(L"Open")));
+        int show = role == VIDEO || (role == HEADER ? !Value(h, PROP(L"Small")) && !Value(h, PROP(L"Full")) : role == SIDEBAR && Value(h, PROP(L"Open")));
         if (role != VIDEO) p->flags = (p->flags & ~(SWP_SHOWWINDOW | SWP_HIDEWINDOW)) | (show ? SWP_SHOWWINDOW : SWP_HIDEWINDOW);
         if (role != HEADER) {
             RECT r = Area(h, role);
@@ -206,31 +254,67 @@ static void ConstrainAspect(HWND h, WPARAM edge, RECT *r)
     if (edge == WMSZ_LEFT || edge == WMSZ_TOPLEFT || edge == WMSZ_BOTTOMLEFT) r->left = r->right - width - dx; else r->right = r->left + width + dx;
     if (edge == WMSZ_TOP || edge == WMSZ_TOPLEFT || edge == WMSZ_TOPRIGHT) r->top = r->bottom - height - dy; else r->bottom = r->top + height + dy;
 }
+static void ConstrainOuterPosition(HWND h, WINDOWPOS *p)
+{
+    if (Value(h, PROP(L"Freeze"))) {
+        if (!(p->flags & SWP_NOSIZE)) { p->cx = Value(h, PROP(L"FrozenWidth")); p->cy = Value(h, PROP(L"FrozenHeight")); }
+        p->flags |= SWP_NOMOVE;
+    }
+    else if (Value(h, PROP(L"Restoring")) && !(p->flags & SWP_NOSIZE)) {
+        /* Native attach commands adjust PotPlayer's cached normal width while
+           fullscreen. Keep the actual pre-fullscreen outer bounds. */
+        p->x = Value(h, PROP(L"RestoreX")); p->y = Value(h, PROP(L"RestoreY"));
+        p->cx = Value(h, PROP(L"RestoreWidth")); p->cy = Value(h, PROP(L"RestoreHeight"));
+        p->flags &= ~SWP_NOMOVE;
+    }
+}
 static LRESULT CALLBACK LayoutProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
     WNDPROC original = (WNDPROC)GetPropW(h, PROP(L"Original"));
     if (!original) return DefWindowProcW(h, msg, wp, lp);
     if (msg == MSG_LAYOUT && wp == 2) {
-        EnumChildWindows(h, RestoreChild, 0); RemovePropW(h, PROP(L"Identified")); SetWindowLongPtrW(h, GWLP_WNDPROC, (LONG_PTR)original); RemovePropW(h, PROP(L"Original")); return 1;
+        EnumChildWindows(h, RestoreChild, 0); RemovePropW(h, PROP(L"Identified")); RemovePropW(h, PROP(L"NativeSynced")); RemovePropW(h, PROP(L"NeedsReflow")); RemovePropW(h, PROP(L"ReflowQueued")); SetWindowLongPtrW(h, GWLP_WNDPROC, (LONG_PTR)original); RemovePropW(h, PROP(L"Original")); return 1;
+    }
+    if (msg == MSG_REFLOW) {
+        RemovePropW(h, PROP(L"ReflowQueued"));
+        if (!Value(h, PROP(L"NeedsReflow"))) return 0;
+        if (Value(h, PROP(L"NativeDepth")) || Value(h, PROP(L"Applying")) || Value(h, PROP(L"Sizing"))) { Put(h, PROP(L"LayoutPending"), 1); return 0; }
+        RemovePropW(h, PROP(L"NeedsReflow"));
+        /* Native attach commands leave the fullscreen render destination at
+           its old size. Wait until they finish, then use the normal size path
+           with child constraints active to scale the picture into the viewport. */
+        RECT client, bounds; GetClientRect(h, &client); GetWindowRect(h, &bounds);
+        Put(h, PROP(L"FrozenWidth"), bounds.right - bounds.left); Put(h, PROP(L"FrozenHeight"), bounds.bottom - bounds.top);
+        Put(h, PROP(L"Freeze"), 1);
+        SendMessageW(h, WM_SIZE, SIZE_RESTORED, MAKELPARAM(client.right, client.bottom));
+        RemovePropW(h, PROP(L"Freeze"));
+        Count(h, PROP(L"ReflowCount"));
+        RedrawWindow(h, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        return 0;
     }
     if (msg == MSG_LAYOUT) {
         /* Explicit bridge input must not be mistaken for native auto-layout
            commands delivered while the player is handling another message. */
-        if (wp == 1) { Policy(h); if (Value(h, PROP(L"AllowSidebar")) && !Value(h, PROP(L"Sizing"))) Put(h, PROP(L"Intent"), !Value(h, PROP(L"Intent"))); }
+        if (wp == 1) ToggleSidebar(h);
         Apply(h); return 1;
     }
     if (msg == WM_COMMAND && LOWORD(wp) == CMD_SMALL) { PostMessageW((HWND)GetPropW(h, PROP(L"Callback")), MSG_SMALL, 0, 0); return 0; }
-    if (msg == WM_WINDOWPOSCHANGING && Value(h, PROP(L"Freeze"))) {
-        WINDOWPOS *p = (WINDOWPOS *)lp;
-        if (!(p->flags & SWP_NOSIZE)) { p->cx = Value(h, PROP(L"FrozenWidth")); p->cy = Value(h, PROP(L"FrozenHeight")); }
-        p->flags |= SWP_NOMOVE;
+    int fullscreenCommand = msg == WM_COMMAND && LOWORD(wp) == 10013;
+    if (fullscreenCommand) {
+        if (!Fullscreen(h)) {
+            RECT bounds; GetWindowRect(h, &bounds);
+            Put(h, PROP(L"RestoreX"), bounds.left); Put(h, PROP(L"RestoreY"), bounds.top);
+            Put(h, PROP(L"RestoreWidth"), bounds.right - bounds.left); Put(h, PROP(L"RestoreHeight"), bounds.bottom - bounds.top);
+            Put(h, PROP(L"RestoreValid"), 1);
+        }
+        else if (Value(h, PROP(L"RestoreValid"))) Put(h, PROP(L"Restoring"), 1);
     }
+    if (msg == WM_WINDOWPOSCHANGING) ConstrainOuterPosition(h, (WINDOWPOS *)lp);
     if (msg == WM_COMMAND && LOWORD(wp) == 10011) {
         /* Native size/edge-hover requests cannot change intent. Do not call the
            original fullscreen command: it also warps the pointer. */
-        if (Value(h, PROP(L"NativeLayout")) || Value(h, PROP(L"Sizing")) || Value(h, PROP(L"Applying"))) return 0;
-        Policy(h); if (!Value(h, PROP(L"AllowSidebar"))) return 0;
-        Put(h, PROP(L"Intent"), !Value(h, PROP(L"Intent"))); Apply(h); return 0;
+        if (Value(h, PROP(L"NativeDepth")) || Value(h, PROP(L"NativeLayout")) || Value(h, PROP(L"Sizing")) || Value(h, PROP(L"Applying"))) return 0;
+        ToggleSidebar(h); Apply(h); return 0;
     }
     if (msg == WM_ENTERSIZEMOVE) Put(h, PROP(L"Sizing"), 1);
     if (msg == WM_EXITSIZEMOVE) RemovePropW(h, PROP(L"Sizing"));
@@ -238,12 +322,18 @@ static LRESULT CALLBACK LayoutProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         ConstrainAspect(h, wp, (RECT *)lp); Count(h, PROP(L"AspectResizeCount")); return TRUE;
     }
     int layout = msg == WM_SIZE || msg == WM_WINDOWPOSCHANGED || msg == WM_TIMER || msg == WM_MOUSEMOVE;
-    if (layout) { Count(h, PROP(L"NativeLayout")); Policy(h); }
+    if (layout) {
+        Count(h, PROP(L"NativeLayout")); Policy(h);
+        if (Value(h, PROP(L"Open")) != Value(h, PROP(L"NativeOpen"))) Put(h, PROP(L"LayoutPending"), 1);
+    }
     Count(h, PROP(L"NativeDepth"));
     LRESULT result = CallWindowProcW(original, h, msg, wp, lp);
     Put(h, PROP(L"NativeDepth"), Value(h, PROP(L"NativeDepth")) - 1);
+    /* The native handler can revise WINDOWPOS, including maximized bounds. */
+    if (msg == WM_WINDOWPOSCHANGING) ConstrainOuterPosition(h, (WINDOWPOS *)lp);
+    if (fullscreenCommand) RemovePropW(h, PROP(L"Restoring"));
     if (layout) Put(h, PROP(L"NativeLayout"), Value(h, PROP(L"NativeLayout")) - 1);
-    if (msg == WM_SIZE || msg == WM_EXITSIZEMOVE || Value(h, PROP(L"LayoutPending"))) { RemovePropW(h, PROP(L"LayoutPending")); Apply(h); }
+    if (msg == WM_SIZE || msg == WM_WINDOWPOSCHANGED || msg == WM_EXITSIZEMOVE || Value(h, PROP(L"LayoutPending"))) { RemovePropW(h, PROP(L"LayoutPending")); Apply(h); }
     return result;
 }
 __declspec(dllexport) LRESULT CALLBACK LayoutHook(int code, WPARAM wp, LPARAM lp)

@@ -19,7 +19,7 @@ namespace BilibiliPotPlayer
             Rectangle client = Native.ClientBounds(player), video = Native.ClientBounds(Native.VideoSurface(player));
             return !client.IsEmpty && !video.IsEmpty && client.Right - video.Right > 100 * Math.Max(96, Native.GetDpiForWindow(player)) / 96.0;
         }
-        internal bool Requested { get { return GetProp(player, "BilibiliLayout.Intent") != IntPtr.Zero; } }
+        internal bool Requested { get { return GetProp(player, GetProp(player, "BilibiliLayout.Full") != IntPtr.Zero ? "BilibiliLayout.FullIntent" : "BilibiliLayout.Intent") != IntPtr.Zero; } }
         void Set(string name, bool value) { SetProp(player, "BilibiliLayout." + name, value ? (IntPtr)1 : IntPtr.Zero); }
         internal void Toggle()
         {

@@ -77,7 +77,7 @@ namespace BilibiliPotPlayer
             IntPtr target = Native.WindowFromPoint(pointer);
             bool inside = (small ? client : ScreenVideo(client)).Contains(pointer.x, pointer.y) && Native.GetAncestor(target, 2) == Player;
             bool menu = owner.Volume.IsOver(pointer) || owner.SpeedMenu.IsOver(pointer) || owner.Streams.IsOver(Player, pointer) || owner.SubtitleMenu.IsOver(pointer);
-            bool show = !owner.Layout.Sizing && activity.Visible(now, pointer.x, pointer.y, inside, Native.IsFullscreen(Player), menu || seeking);
+            bool show = !owner.Layout.Sizing && activity.Visible(now, pointer.x, pointer.y, inside, !small, menu || seeking);
             bool changed = controls != show; controls = show;
             if (now < nextFrame && !changed) { RaiseBelowMenu(); return; }
             nextFrame = now + 80;
