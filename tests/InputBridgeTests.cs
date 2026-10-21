@@ -30,6 +30,8 @@ internal static class BridgeTests
         if (args.Length > 0 && args[0] == "--chrome-check") { WindowModeChecks.CheckChromeGestures(); return 0; }
         if (args.Length > 0 && args[0] == "--sidebar-pixel-check") { WindowModeChecks.CheckSidebarPixels(); return 0; }
         if (args.Length > 0 && args[0] == "--sidebar-resize-check") { WindowModeChecks.CheckSidebarResize(); return 0; }
+        if (args.Length > 0 && args[0] == "--startup-layout-check") { WindowModeChecks.CheckStartupLayout(args.Length > 1 ? args[1] : ""); return 0; }
+        if (args.Length > 0 && args[0] == "--sidebar-tab-check") { WindowModeChecks.CheckSidebarTabs(); return 0; }
         if (args.Length > 0 && args[0] == "--layout-check") { WindowModeChecks.Run(); return 0; }
         if (args.Length > 0 && args[0] == "--status") { Status(); return 0; }
         if (args.Length > 0 && args[0] == "--ui-status") { UiStatus(); return 0; }

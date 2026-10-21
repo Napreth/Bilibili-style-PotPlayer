@@ -21,5 +21,4 @@
 					</Static>
 				</Static>
 			</Static>
-			<Static Align='Right' Contain='CMD_CHAT_PLAYLIST_BROADCAST_TOGGLE' TopMargin='20' BottomMargin='20' ImageLeft='309' ImageTop='715' ImageWidth='3' ImageHeight='142' Width='3' IsSplitter='1' MinSplitterSizeLT='384' MinSplitterSizeRB='317' />
 		</ImageReplace>

@@ -113,15 +113,6 @@ static BOOL CALLBACK FindPlaylist(HWND child, LPARAM data)
     EnumChildWindows(h, FindSplitter, (LPARAM)h);
     return FALSE;
 }
-static int ContentReady(HWND h, HWND list)
-{
-    HWND pane = (HWND)GetPropW(h, PROP(L"Sidebar"));
-    if (!IsWindow(list) || !IsWindow(pane)) return 0;
-    for (HWND part = list; part != pane; part = GetParent(part)) {
-        if (!IsWindow(part) || !(GetWindowLongPtrW(part, GWL_STYLE) & WS_VISIBLE)) return 0;
-    }
-    return 1;
-}
 static void NativeCommand(HWND h, int command)
 {
     WNDPROC original = (WNDPROC)GetPropW(h, PROP(L"Original"));
@@ -133,7 +124,7 @@ static void NativeCommand(HWND h, int command)
        that synchronous call at its existing position, then restore the caller's
        clipping rectangle; never move the pointer back after a visible jump. */
     RECT clip; POINT pointer;
-    int retainPointer = command == 20052 && Fullscreen(h) && GetClipCursor(&clip) && GetCursorPos(&pointer);
+    int retainPointer = command == 20048 && Fullscreen(h) && GetClipCursor(&clip) && GetCursorPos(&pointer);
     if (retainPointer) {
         RECT point = {pointer.x, pointer.y, pointer.x + 1, pointer.y + 1};
         retainPointer = ClipCursor(&point);
@@ -150,17 +141,16 @@ static void PrepareSidebar(HWND h)
     /* Native panes can be recreated after a file or display-mode change. Bind
        their replacements even while suppressed, so they cannot escape hiding. */
     EnumChildWindows(h, FindPlaylist, (LPARAM)h);
-    if (!Requested(h) || !Value(h, PROP(L"AllowSidebar"))) return;
-    HWND list = (HWND)GetPropW(h, PROP(L"Playlist"));
-    if (ContentReady(h, list)) {
-        Put(h, PROP(L"SidebarReady"), 1); return;
+    int ready = IsWindow((HWND)GetPropW(h, PROP(L"Sidebar")));
+    if (!ready && Requested(h) && Value(h, PROP(L"AllowSidebar"))) {
+        /* Open the attached pane without selecting a tab. Hidden playlist
+           controls are normal while the browser tab is selected. */
+        NativeCommand(h, 20048);
+        EnumChildWindows(h, FindPlaylist, (LPARAM)h);
+        ready = IsWindow((HWND)GetPropW(h, PROP(L"Sidebar")));
+        Count(h, PROP(L"SidebarInitializedCount"));
     }
-    /* Select the native playlist tab to initialize its real child controls. */
-    NativeCommand(h, 20052);
-    EnumChildWindows(h, FindPlaylist, (LPARAM)h);
-    list = (HWND)GetPropW(h, PROP(L"Playlist"));
-    Put(h, PROP(L"SidebarReady"), ContentReady(h, list));
-    Count(h, PROP(L"SidebarInitializedCount"));
+    Put(h, PROP(L"SidebarReady"), ready);
 }
 static void Place(HWND h, LPCWSTR key, int role, int show)
 {
@@ -193,7 +183,7 @@ static void Apply(HWND h)
         /* Showing/hiding the HWND alone leaves the native renderer's reserved
            sidebar area and cached pixels intact, especially in fullscreen. */
         Put(h, PROP(L"NativeSynced"), 1); Put(h, PROP(L"NativeOpen"), open);
-        NativeCommand(h, open ? 20052 : 20049);
+        NativeCommand(h, open ? 20048 : 20049);
     }
     Place(h, PROP(L"Header"), HEADER, !Value(h, PROP(L"Small")) && !Value(h, PROP(L"Full")));
     Place(h, PROP(L"Sidebar"), SIDEBAR, Value(h, PROP(L"Open")));

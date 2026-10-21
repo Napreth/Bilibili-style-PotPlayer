@@ -203,6 +203,45 @@ internal static class WindowModeChecks
         }
         Console.WriteLine("PASS: " + checks + " sidebar resize checks");
     }
+    // Read-only until the screen check completes: a sidebar toggle would repair
+    // the startup artifact and invalidate this regression check.
+    internal static void CheckStartupLayout(string expected)
+    {
+        IntPtr player = Native.PlayerWindows()[0];
+        for (int i = 0; i < 100 && !Property(player, "Original"); i++) Wait(100);
+        Check(Property(player, "Original"), "startup layout hook is attached");
+        Rectangle video = Native.ClientBounds(Native.VideoSurface(player));
+        Check(video.Width > 100 && video.Height > 100, "startup video viewport exists without toggling the sidebar");
+        using (Bitmap row = new Bitmap(video.Width, 1))
+        {
+            using (Graphics g = Graphics.FromImage(row)) g.CopyFromScreen(video.Left, video.Top + video.Height / 2, 0, 0, row.Size);
+            int margin = Math.Max(3, (video.Width - Math.Min(video.Width, video.Height * 16 / 9)) / 2 + 3), bad = -1;
+            for (int x = margin; x < row.Width - margin; x++) { Color color = row.GetPixel(x, 0); if (color.R < 235 || color.G < 235 || color.B < 235) { bad = x; break; } }
+            Check(bad < 0, "startup picture has no internal black column (first unexpected column " + bad + ")");
+        }
+        Check(!Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Splitter")), "startup splitter stays hidden");
+        if (Property(player, "Open")) Check(video.Right == Bounds(GetProp(player, "BilibiliLayout.Sidebar")).Left, "startup video touches the sidebar");
+        if (expected == "browser") Check(Property(player, "Open") && !Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Playlist")), "startup retains the native browser tab");
+        if (expected == "closed") Check(!Property(player, "Open") && !Native.IsWindowVisible(GetProp(player, "BilibiliLayout.Sidebar")), "startup retains the closed sidebar");
+        Console.WriteLine("PASS: " + checks + " startup layout checks");
+    }
+    internal static void CheckSidebarTabs()
+    {
+        IntPtr player = Native.PlayerWindows()[0];
+        if (Native.IsFullscreen(player)) Key(player, 0x1B);
+        Size(player, 1100, 650); Open(player, true);
+        Native.SetCommand(player, 20051); Wait(1200);
+        IntPtr list = GetProp(player, "BilibiliLayout.Playlist");
+        Check(Property(player, "Open") && !Native.IsWindowVisible(list), "browser tab remains selected across layout updates");
+        Open(player, false); Open(player, true);
+        Check(!Native.IsWindowVisible(list), "reopening the sidebar preserves the browser tab");
+        Size(player, 900, 650); Size(player, 1100, 650);
+        Check(Property(player, "Open") && !Native.IsWindowVisible(list), "automatic collapse and restore preserve the browser tab");
+        Key(player, 0x46); Key(player, 0x1B);
+        Check(Property(player, "Open") && !Native.IsWindowVisible(list), "fullscreen round trip preserves the browser tab");
+        Native.SetCommand(player, 20052); Wait(700); CheckPlaylist(player, "after selecting playlist explicitly");
+        Console.WriteLine("PASS: " + checks + " sidebar tab checks");
+    }
     internal static void CheckAspect()
     {
         IntPtr player = Native.PlayerWindows()[0];
