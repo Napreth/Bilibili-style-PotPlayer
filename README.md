@@ -19,32 +19,19 @@
 
 ## 环境要求
 
-- Windows 64 位与 64 位 PotPlayer。
-- .NET Framework 及其 64 位 C# 编译器。构建脚本使用 Windows 自带的 `csc.exe`，不需要安装 .NET SDK。
-- Windows PowerShell 5.1 或 PowerShell 7。
-- 读取容器内文本字幕需要 **FFmpeg**，仓库不附带 FFmpeg。辅助程序依次从自己的安装目录、当前用户 WinGet 链接目录和 `PATH` 查找 `ffmpeg.exe`。
-
-MediaInfo DLL 及其授权文件包含在 `plugin/InputBridge/vendor/` 中；窗口布局模块 `PlayerLayout.dll` 及 C 源码位于 `plugin/InputBridge/native/`。皮肤的播放控制栏需要同时安装辅助程序。
+- Windows 10/11 x64 与 64 位 PotPlayer，使用系统 .NET Framework。
+- 安装包包含 MediaInfo 和 LGPL 版 FFmpeg 动态库，无需另装 FFmpeg 或修改 PATH。
+- 开发构建需要 x64 MinGW-w64 GCC、GNU Make、Bash 和 PowerShell；C# 使用系统 Framework64 编译器。
 
 ## 安装
 
-先关闭所有 PotPlayer 窗口，在项目根目录打开 PowerShell。将下面的目录改为自己的 PotPlayer 安装目录，并确保具有该目录的写入权限：
+关闭所有 PotPlayer 窗口，运行 `BilibiliBehaviors-版本-win-x64-setup.exe`，选择包含 64 位 PotPlayer 的目录。安装程序备份原有鼠标、快捷键、皮肤选择和已有同名资源，然后启用 BilibiliLite。
 
-```powershell
-$playerDir = 'C:\Program Files\DAUM\PotPlayer'
+入口为 `Extension/BilibiliBehaviors/BilibiliBehaviors.exe`，由 PotPlayer 播放扩展启动并加载 8 个业务／基础 DLL。没有托盘图标、登录自启、服务或计划任务；多个播放器窗口共用宿主，最后一个实例退出后释放资源并结束进程。
 
-.\skin\build.ps1
-Copy-Item .\skin\BilibiliLite.dsf (Join-Path $playerDir 'Skins\BilibiliLite.dsf') -Force
-.\settings\install-input.ps1 -PlayerPath (Join-Path $playerDir 'PotPlayerMini64.exe')
-```
+原生主窗口自定义快捷键会暂时清空，首次备份保存在 `%LOCALAPPDATA%\BilibiliPotPlayer\installation`，升级沿用。旧版手动安装需要先恢复，或使用安装参数 `/LEGACYBACKUP="原 original-input.json 路径"` 导入备份。
 
-启动 PotPlayer，在“皮肤”菜单选择 `BilibiliLite`。
-
-安装脚本会编译并检查辅助程序，备份将修改的原生设置，再应用本项目的鼠标和快捷键配置。原生主窗口的自定义快捷键会被清空，原值一并保存在 `settings/.local/original-input.json`。请保留这份备份，重复安装会沿用它。
-
-辅助程序安装到 PotPlayer 的 `Extension/BilibiliInput/`，由播放扩展随 PotPlayer 启动，最后一个播放器实例退出后自动结束，无登录自启。辅助程序读取媒体规格和字幕；点击“在线字幕搜索”才会打开 PotPlayer 的原生搜索入口。
-
-运行中更新及完整安装细节见 [操作配置与安装说明](settings/README.md)。
+安装和卸载细节见 [安装说明](docs/installation.md)，模块边界见 [架构说明](docs/architecture.md)。
 
 ## 常用操作
 
@@ -67,7 +54,7 @@ Copy-Item .\skin\BilibiliLite.dsf (Join-Path $playerDir 'Skins\BilibiliLite.dsf'
 | 360° 视频中键拖动 / 单击 | 转动视角 / 回正 |
 | F1–F12（F5 除外） | 保留原生功能 |
 
-F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂时禁用，未列出的播放器快捷键由辅助程序屏蔽；系统窗口操作和原生菜单／对话框输入不受影响。完整按键表见 [settings/README.md](settings/README.md)。
+F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂时禁用，未列出的播放器快捷键由辅助程序屏蔽；系统窗口操作和原生菜单／对话框输入不受影响。完整按键表见上表，部署细节见[安装说明](docs/installation.md)。
 
 ## 字幕与弹幕
 
@@ -89,52 +76,61 @@ F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂�
 - 窗口宽度低于 **1024** 或高度低于 **540 逻辑像素**时暂时关闭并禁止展开侧栏，正常控制栏保持一致；宽度低于 **800** 或高度低于 **480** 时进入小窗模式。这些数值按本皮肤控件空间制定，并非 B 站官方阈值。S 默认使用约 640 像素宽的视频窗口，返回时恢复至允许侧栏的最小尺寸，并按记忆状态展开侧栏。
 - 触控布局保留，但尚未像常规桌面布局一样完整验证；不同 PotPlayer 版本、渲染器和多屏 DPI 组合仍需进一步验证。
 
-## 恢复原生操作配置
+## 卸载与恢复
 
-关闭 PotPlayer，在项目根目录执行：
-
-```powershell
-.\settings\restore-input.ps1
-```
-
-脚本恢复首次安装前备份的交互设置及自定义快捷键，并移除本项目的启动扩展。皮肤需要在 PotPlayer 中自行切回，字幕／弹幕样式配置保留在用户目录。
+关闭 PotPlayer，在 Windows“已安装的应用”中卸载 **Bilibili Behaviors for PotPlayer**。卸载恢复原操作配置、快捷键及皮肤选择，恢复安装前已有的同名文件，移除本项目记录的安装文件。字幕／弹幕偏好保留在用户目录。
 
 ## 构建与验证
 
 ```powershell
-# 重新打包皮肤
-.\skin\build.ps1
+# 完整构建、验证并生成安装包，输出到 build/out/dist/
+.\build\package.ps1
 
-# 编译辅助程序并运行检查
-.\plugin\InputBridge\build.ps1 -Test
+# 只改 C# 后编译 DLL 并运行检查
+.\build\managed.ps1 -Test
 
-# 修改 C 源码后重建窗口布局模块（需要 64 位 MinGW-w64 GCC）
-.\plugin\InputBridge\native\build.ps1
+# 修改 C 源码或皮肤覆盖文件后
+.\build\native.ps1
+.\build\skin.ps1
 
-# 只读查看当前播放器状态
-.\plugin\InputBridge\bin\InputBridgeTests.exe --status
+# 开发诊断（只读）
+.\scripts\dev.ps1 status
 ```
 
-检查程序覆盖输入操作、媒体元数据、字幕解析、设置持久化和控件布局。`-Test` 运行逻辑检查；窗口布局检查通过独立命令执行。
-
-`--window-check` 会临时改变测试播放器尺寸，检查侧栏开关、状态记忆及 C/S 快捷键，结束后恢复窗口状态。`PlayerLayout.dll` 更新后需要重新启动 PotPlayer。更多诊断命令见 [验证说明](settings/README.md#验证与接口来源)。
+`build/` 保存构建、依赖下载、安装与卸载逻辑，`scripts/` 保存开发诊断和样本生成。GitHub Actions 在 Windows 上从源码构建 LGPL FFmpeg，运行逻辑、原生提取及安装恢复检查，生成安装包工件，不自动发布 Release。
 
 ## 目录
 
 ```text
-skin/                  皮肤源文件、打包脚本与 BilibiliLite.dsf
-plugin/InputBridge/    C# 辅助程序、启动扩展和第三方依赖
-settings/              操作配置、安装／恢复脚本和详细说明
-tests/                 检查程序与小型元数据样本
+src/Host/            BilibiliBehaviors.exe 与 PotPlayer 启动扩展
+src/Contracts/       跨模块接口和配置／数据结构
+src/Runtime/         生命周期、模块校验和每窗口组合
+src/Platform/        Win32、DPI、公共绘制与资源
+src/Input/           键鼠与相机手势
+src/Windowing/       侧栏、全屏、小窗和原生布局桥接
+src/Playback/        控制栏、进度、倍速和音量
+src/Media/           媒体规格、轨道和选轨
+src/Captions/        字幕、弹幕和设置界面
+src/Native/          PlayerLayout 与 FFmpeg 文本适配器
+skin/base/           固定的默认皮肤底包和校验值
+skin/overrides/      8 个修改定义和 1 个新增图标
+config/             输入配置
+third_party/        MediaInfo、LGPL FFmpeg 及构建配置
+LICENSES/           第三方许可证与声明
+scripts/            开发工具
+build/              构建、安装与卸载；out/ 不进入 Git
+tests/              逻辑、原生提取、窗口和安装检查
 ```
 
-配置备份、编译输出及开发验证产物不进入 Git。
+皮肤构建时将底包与覆盖文件合并为完整 DSF。配置备份及开发验证产物不进入 Git。
 
 ## 授权与资源来源
 
 本项目原创代码采用 [MIT License](LICENSE)。皮肤基于 PotPlayer 随附的默认皮肤修改，原始皮肤资源不属于本项目原创内容；Dolby 标志、哔哩哔哩播放器图标及相关商标归各自权利人所有，不包含在原创代码的 MIT 授权范围内。
 
-- [MediaInfo 授权文件](plugin/InputBridge/vendor/MediaInfo.License.html)
-- [杜比 SVG 资源来源](plugin/InputBridge/assets/README.md)
-- [弹幕过滤图标来源](plugin/InputBridge/assets/BilibiliFilterSources.md)
+- [MediaInfo 授权文件](LICENSES/MediaInfo.License.html)
+- [杜比 SVG 资源来源](src/Platform/assets/README.md)
+- [弹幕过滤图标来源](src/Platform/assets/BilibiliFilterSources.md)
 - [测试样本说明](tests/fixtures/README.md)
+
+第三方许可证与声明统一放在 [LICENSES/](LICENSES/README.md)。FFmpeg 动态库使用 LGPL 构建；安装包包含对应原始源码压缩包、配置及构建脚本。

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
@@ -114,10 +114,5 @@ internal static class TimedTextChecks
             check(loaded.Region == 10 && loaded.Size == 170 && loaded.Speed == 160 && loaded.Classes["keep"] == 2 && loaded.UseDanmakuColor, "legacy defaults migrate with range limits and classifications intact");
         }
         finally { if (System.IO.File.Exists(settingFile)) System.IO.File.Delete(settingFile); }
-        string localLink = System.IO.Path.Combine("D:\\local", "Microsoft", "WinGet", "Links", "ffmpeg.exe");
-        check(CaptionCatalog.FindDecoder("D:\\runtime", "D:\\local", "bad\0path;C:\\bad\"entry", candidate => candidate == localLink) == localLink, "a valid local decoder is returned before malformed PATH entries are processed");
-        check(CaptionCatalog.FindDecoder("D:\\runtime", "D:\\local", "C:\\bad\"entry;C:\\bad\nentry; \"C:\\tools 你好\" ", candidate => candidate == "C:\\tools 你好\\ffmpeg.exe") == "C:\\tools 你好\\ffmpeg.exe", "invalid PATH entries are skipped while quoted unicode folders still resolve");
-        check(CaptionCatalog.FindDecoder("D:\\runtime", "D:\\local", "relative;bad\0path", candidate => false) == null, "missing decoder reports absence rather than illegal path characters");
-        string difficult = "C:\\a b\\你好\"\\"; check(CaptionCatalog.Quote(difficult).EndsWith("\\\\\"") && CaptionCatalog.Quote(difficult).Contains("\\\""), "decoder arguments preserve spaces quotes unicode and trailing slashes");
     }
 }

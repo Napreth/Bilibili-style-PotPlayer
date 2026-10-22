@@ -1,0 +1,9 @@
+Bilibili Behaviors for PotPlayer (pre-alpha)
+
+Select the directory containing an existing 64-bit PotPlayer. This installer does not include PotPlayer.
+
+Close PotPlayer before installation or removal. Existing mouse actions, keyboard shortcuts and skin selection are backed up, then BilibiliLite is enabled. Removal restores those preferences; subtitle and danmaku preferences are retained.
+
+Use the same Windows account for installation and removal. Administrator access is requested to write to the player directory. Third-party notices and matching FFmpeg sources are included.
+
+For legacy installations, first restore the old version or pass /LEGACYBACKUP="path to original-input.json".

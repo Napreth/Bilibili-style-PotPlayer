@@ -165,6 +165,9 @@ internal static class BridgeTests
         for (int key = 0x70; key <= 0x7B; key++)
             Equal(key == 0x74 ? KeyRoute.Blocked : KeyRoute.Native, InputPolicy.Route(key, false, false, false, false), "function key " + key);
         Equal(KeyRoute.Native, InputPolicy.Route(0x75, true, true, false, false), "modified F6 retains native behavior");
+        Equal(KeyRoute.Native, InputPolicy.Route(0x5B, false, false, false, false), "left Windows key reaches the system before its state changes");
+        Equal(KeyRoute.Native, InputPolicy.Route(0x5C, false, false, false, false), "right Windows key reaches the system before its state changes");
+        Equal(KeyRoute.Native, InputPolicy.Route(0x52, false, false, false, true), "Windows R opens the system Run dialog");
         Equal(KeyRoute.Blocked, InputPolicy.Route(0x74, true, true, false, false), "modified F5 remains reserved");
         Equal(KeyRoute.Blocked, InputPolicy.Route(0x0D, false, false, true, false), "Alt Enter cannot invoke default fullscreen");
         Equal(KeyRoute.Blocked, InputPolicy.Route(0x43, false, true, false, false), "unlisted native shortcut is disabled");
@@ -213,6 +216,8 @@ internal static class BridgeTests
         DolbyVisionProbeChecks.Run(Equal<bool>);
         SphericalVideoProbeChecks.Run(Equal<bool>);
         TimedTextChecks.Run(Equal<bool>);
+        ModuleChecks.Run(Equal<bool>);
+        NativeTimedTextChecks.Run(Equal<bool>);
         Console.WriteLine("PASS: " + checks + " input and metadata checks");
         return 0;
     }
@@ -522,7 +527,7 @@ internal static class BridgeTests
             try
             {
                 using (Process process = Process.GetProcessById((int)pid))
-                    if (process.ProcessName != "BilibiliInput") return true;
+                    if (process.ProcessName != "BilibiliBehaviors") return true;
                 System.Text.StringBuilder title = new System.Text.StringBuilder(128);
                 GetWindowText(window, title, title.Capacity);
                 if (title.Length == 0) return true;

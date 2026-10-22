@@ -1,0 +1,62 @@
+name: Windows build and installer
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+      - name: Verify and extract FFmpeg source
+        run: ./build/ffmpeg.ps1 -PrepareOnly
+      - name: Build LGPL-only FFmpeg shared libraries
+        shell: msys2 {0}
+        run: |
+          cd .local/dependencies/ffmpeg-8.0.1
+          bash ../../../build/ffmpeg.sh
+      - name: Compile native modules and managed DLLs; run checks
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $env:PATH = "$env:MSYS2_LOCATION\mingw64\bin;" + $env:PATH
+          ./build/ffmpeg.ps1 -CollectOnly
+          ./build/native.ps1
+          ./build/managed.ps1 -Test
+          ./build/skin.ps1
+      - name: Build Windows installer
+        run: ./build/package.ps1 -SkipBuild
+      - name: Verify installation, upgrades and removal
+        shell: powershell
+        run: |
+          ./scripts/check-package.ps1
+          ./scripts/test-installation.ps1
+      - name: Upload installer and checksum manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: BilibiliBehaviors-win-x64
+          path: |
+            build/out/dist/*-setup.exe
+            build/out/dist/*.sha256
+            build/out/package/checksums.json
+          if-no-files-found: error
+          retention-days: 14

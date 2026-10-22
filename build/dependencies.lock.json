@@ -1,0 +1,12 @@
+{
+  "ffmpeg": {
+    "version": "8.0.1",
+    "url": "https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz",
+    "sha256": "05EE0B03119B45C0BDB4DF654B96802E909E0A752F72E4FE3794F487229E5A41"
+  },
+  "innoSetup": {
+    "version": "6.7.3",
+    "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe",
+    "sha256": "9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732"
+  }
+}

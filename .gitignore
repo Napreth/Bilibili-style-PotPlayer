@@ -1,3 +1,4 @@
 settings/.local/
 plugin/InputBridge/bin/
 .local/
+build/out/
