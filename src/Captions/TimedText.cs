@@ -28,6 +28,8 @@ namespace BilibiliPotPlayer
         internal string Id, Title, Detail = "", Path, Format = "", Error = "";
         internal string AssHeader = "";
         internal bool ProtocolAdvanced;
+        internal bool Converted;
+        internal readonly List<TextCue> OriginalEvents = new List<TextCue>();
         internal bool AssRenderable { get { return AssHeader.Length > 0 && !ProtocolAdvanced; } }
         internal readonly List<AssFont> Fonts = new List<AssFont>();
         internal TextCategory Category, AutoCategory;
@@ -135,9 +137,9 @@ namespace BilibiliPotPlayer
                     string[] p = (reader.GetAttribute("p") ?? "").Split(','); string text = reader.ReadElementContentAsString();
                     int mode, size = 25, color = 0xFFFFFF; double time;
                     if (p.Length < 4 || !Double.TryParse(p[0], NumberStyles.Float, Inv, out time) || Valid(time) < 0 || !Int32.TryParse(p[1], out mode)) continue;
-                    if (mode >= 7 && mode <= 9) { advancedCount++; advanced.Events.Add(new TextCue { Start = time, End = time + 8, RawContent = text, Origin = "Bilibili XML mode " + mode, Effects = CueEffects.Protocol, DurationInferred = true }); continue; }
-                    if (mode < 1 || mode > 6) continue;
                     if (!Int32.TryParse(p[2], out size)) size = 25; if (!Int32.TryParse(p[3], out color)) color = 0xFFFFFF;
+                    if (mode >= 7 && mode <= 9) { advancedCount++; advanced.Events.Add(new TextCue { Start = time, End = time + 8, Mode = mode, Size = size, Color = color, RawContent = text, Origin = "Bilibili XML mode " + mode, Effects = CueEffects.Protocol, DurationInferred = true }); continue; }
+                    if (mode < 1 || mode > 6) continue;
                     Add(ordinary, new TextCue { Start = time, End = time + 8, Text = text.Replace("/n", "\n"), Mode = mode, Size = size, Color = color, RawContent = text, Origin = "Bilibili XML mode " + mode, DurationInferred = true, Declared = TextCategory.Danmaku, Motion = mode == 4 || mode == 5 ? CueMotion.Static : CueMotion.Horizontal });
                 }
             ordinary.Analysis = CaptionClassifier.Analyze(ordinary.Events); ordinary.AutoCategory = TextCategory.Danmaku;

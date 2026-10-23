@@ -10,6 +10,7 @@
 - **悬浮控制**：音量按钮单击静音，悬停调音量；倍速菜单提供 0.25×、0.5×、1×、2×、3×、5×、10×，1× 时按钮显示“倍速”。
 - **音视频信息与选轨**：显示 Hi-Res、空间音频、声道布局、HDR、分辨率和帧率，详细规格保留在悬浮列表中。单轨时不弹出列表，打开文件时沿用 PotPlayer 的自动选轨结果。Hi-Res 标记描述文件规格，不评价实际听感。
 - **字幕和弹幕**：汇总同目录文件、手动导入文件和容器内文本软字幕；支持主／副双字幕、普通弹幕独立开关、内容分类、拖动改分类和分页列表。
+- **高级弹幕转换**：B 站 Mode 7 通过 DanmakuFactory 转为 ASS，再由 libass 渲染；与不支持的 Mode 8／9 分开列出，可独立开关。
 - **样式设置**：字体预览、字号、粗体／斜体、文字颜色、背景填充、描边和投影；弹幕另有类型过滤、显示区域、透明度、速度、随屏幕缩放和防挡字幕。设置与手动分类自动保存。
 - **侧栏内缩**：窗口和全屏模式下均在内部缩小视频区域，保持外窗尺寸和鼠标位置；可切换原生浏览器与播放列表，开关侧栏保留当前标签。空间不足时暂时收起，放大后恢复原来的展开状态。进入全屏时临时收起侧栏，退出时恢复窗口模式的记忆；全屏内手动开关会更新这份记忆。全屏右边缘悬停不展开侧栏。
 - **悬浮控制栏与小窗模式**：正常模式的半透明底栏在鼠标进入播放区时显示。小窗模式提供悬浮标题栏、精简底栏、字幕／弹幕开关及视频比例锁定，鼠标移出后只保留画面。
@@ -21,7 +22,7 @@
 
 - Windows 10/11 x64 与 64 位 PotPlayer，使用系统 .NET Framework。
 - 安装包包含 MediaInfo、LGPL 版 FFmpeg 及 libass 动态库，无需另装渲染依赖或修改 PATH。
-- 开发构建需要 x64 MinGW-w64 GCC、GNU Make、Bash、Python 和 PowerShell；C# 使用系统 Framework64 编译器。
+- 开发构建需要 Git、x64 MinGW-w64 GCC、GNU Make、Bash、CMake、Python 和 PowerShell；C# 使用系统 Framework64 编译器。
 
 ## 安装
 
@@ -68,11 +69,13 @@ F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂�
 
 字幕、普通弹幕和标准 ASS／SSA 特效统一由 libass 渲染。ASS 保留源画布、样式、Layer、运动、旋转、缩放、淡入淡出、卡拉 OK、裁剪和矢量绘图，并读取容器字体附件。高级列表中可单独开关 ASS 特效，“高级”过滤按钮控制这类效果。原生 ASS 遵循作者的样式和时间；字体、字号、速度和区域等通用设置用于普通文本及生成的弹幕。渲染链路见 [渲染说明](docs/rendering.md)。
 
+Mode 7 在后台加载时经 DanmakuFactory 转换一次，转换结果复用现有 ASS 渲染链路和高级过滤开关。普通弹幕继续使用原排布，标准 ASS／SSA 直接渲染；源文件不修改。转换失败与未支持的事件保留计数及原因，不会作为普通弹幕播放。依赖固定为 `third_party/DanmakuFactory` 子模块，接入与后续改造安排见 [弹幕转换说明](docs/danmaku-conversion.md)。
+
 设置保存在 `%LOCALAPPDATA%\BilibiliPotPlayer\caption-options.json`，包含显示样式和手动分类，不改写源字幕或弹幕文件。
 
 ## pre-alpha 限制
 
-- B 站 Mode 7、8、9（高级、代码、BAS）仅识别、分类与计数，暂不播放或执行；它们不属于 ASS 特效支持范围。
+- B 站 Mode 8（代码）与 Mode 9（BAS）仅识别、分类与计数，暂不播放或执行。Mode 9 支持安排在 post-v1；Mode 8 届时再评估。Mode 7 按 DanmakuFactory 当前能力转换，路径等上游未处理的表现不承诺完整还原。
 - PGS、VobSub 等图像字幕沿用 PotPlayer 原生渲染，面板会列出，但暂不支持在此切换。
 - 翻译、语音生成字幕、自定义右键菜单和 F5 设置页尚未实现；智能识别人像的防挡弹幕尚未实现。
 - Hi-Res、HDR、空间音频标记基于源文件信息，不表示当前设备或渲染链路已经完整输出对应效果。
@@ -86,6 +89,9 @@ F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂�
 ## 构建与验证
 
 ```powershell
+# 首次克隆或更新已有检出后初始化依赖源码
+git submodule update --init --recursive
+
 # 完整构建、验证并生成安装包，输出到 build/out/dist/
 .\build\package.ps1
 
@@ -96,11 +102,14 @@ F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂�
 .\build\native.ps1
 .\build\skin.ps1
 
+# 修改转换适配器或 DanmakuFactory 源码后
+.\build\danmaku-factory.ps1
+
 # 开发诊断（只读）
 .\scripts\dev.ps1 status
 ```
 
-`build/` 保存构建、依赖下载、安装与卸载逻辑，`scripts/` 保存开发诊断和样本生成。GitHub Actions 在 Windows 上从源码构建 LGPL FFmpeg 和 libass，运行逻辑、原生提取、实际像素渲染及安装恢复检查，生成安装包工件，不自动发布 Release。
+`build/` 保存构建、依赖下载、安装与卸载逻辑，`scripts/` 保存开发诊断和样本生成。GitHub Actions 初始化子模块，在 Windows 上从源码构建 LGPL FFmpeg、libass 和 DanmakuFactory，运行逻辑、原生提取、实际转换／像素渲染及安装恢复检查，生成安装包工件，不自动发布 Release。
 
 ## 目录
 
@@ -118,7 +127,7 @@ src/Native/          PlayerLayout、FFmpeg 文本适配器与 libass 渲染适�
 skin/base/           固定的默认皮肤底包和校验值
 skin/overrides/      8 个修改定义和 1 个新增图标
 config/             输入配置
-third_party/        MediaInfo、LGPL FFmpeg、libass 及构建配置
+third_party/        MediaInfo、LGPL FFmpeg、libass、DanmakuFactory 子模块及构建配置
 LICENSES/           第三方许可证与声明
 scripts/            开发工具
 build/              构建、安装与卸载；out/ 不进入 Git

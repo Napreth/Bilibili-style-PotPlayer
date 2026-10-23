@@ -114,7 +114,7 @@ namespace BilibiliPotPlayer
             }
             TextSource main = Find(Slots.Main), secondary = Find(Slots.Secondary);
             EnsureLoaded(main); EnsureLoaded(secondary);
-            if (Sources.Exists(s => s.AssRenderable && s.Enabled && (s.Category == TextCategory.Advanced && Options.AssEffectsEnabled || s.Category == TextCategory.Danmaku && Options.DanmakuEnabled))) captionControlActive = true;
+            if (Sources.Exists(s => !s.Converted && s.AssRenderable && s.Enabled && (s.Category == TextCategory.Advanced && Options.AssEffectsEnabled || s.Category == TextCategory.Danmaku && Options.DanmakuEnabled))) captionControlActive = true;
             if (captionControlActive || !Options.SubtitlesEnabled) SetNativeVisible(false);
         }
         void Discover()
@@ -143,9 +143,9 @@ namespace BilibiliPotPlayer
         }
         internal static bool SupportedExtension(string extension)
         { return new HashSet<string> { ".srt", ".ass", ".ssa", ".vtt", ".lrc", ".xml", ".json", ".ttml", ".dfxp" }.Contains(extension.ToLowerInvariant()); }
-        static List<TextSource> ReadFile(string file)
+        internal static List<TextSource> ReadFile(string file)
         {
-            List<TextSource> sources = TimedText.Read(file);
+            List<TextSource> sources = DanmakuFactory.Adapt(TimedText.Read(file));
             for (int i = 0; i < sources.Count; i++) { TextSource source = sources[i]; source.Path = file; source.Id = Key(file) + ":" + i; source.Enabled = source.Category == TextCategory.Danmaku && source.Cues.Count > 0 || source.Category == TextCategory.Advanced && source.AssRenderable; }
             return sources;
         }
@@ -161,7 +161,7 @@ namespace BilibiliPotPlayer
                     if (version != generation) return;
                     if (result == null) { Status = "无法读取：" + error; return; }
                     foreach (TextSource source in result)
-                    { TextSource existing = Find(source.Id); if (existing == null) Sources.Add(source); else if (existing.Category == TextCategory.Danmaku) existing.Enabled = true; }
+                    { TextSource existing = Find(source.Id); if (existing == null) Sources.Add(source); else if (existing.Error.Length>0 || source.Converted) Sources[Sources.IndexOf(existing)]=source; else if (existing.Category == TextCategory.Danmaku || existing.Category == TextCategory.Advanced && existing.AssRenderable) existing.Enabled = true; }
                     ApplyClasses(result); Status = "";
                     TextSource subtitle = result.Find(s => s.Category == TextCategory.Subtitle && s.Error.Length == 0); if (subtitle != null) { initialSelectionDone = captionControlActive = true; if (Slots.Main != subtitle.Id && Slots.Secondary != subtitle.Id) Slots.Select(subtitle.Id); EnsureLoaded(Find(subtitle.Id)); }
                     Revision++;

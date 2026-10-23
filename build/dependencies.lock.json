@@ -47,5 +47,15 @@
         "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.17/fribidi-1.0.17.tar.xz"
       }
     ]
+  },
+  "danmakuFactory": {
+    "repository": "https://github.com/hihkm/DanmakuFactory.git",
+    "commit": "3813e93b13b087e95901d1822baf9c3540e3f3f6",
+    "pcre2": {
+      "version": "10.49",
+      "archive": "pcre2-10.49.tar.gz",
+      "url": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.49/pcre2-10.49.tar.gz",
+      "sha256": "929F0B20E62879252A15886B06C89F1EDEF61A363CBD5826FB041080A5E557AE"
+    }
   }
 }

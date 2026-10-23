@@ -224,6 +224,7 @@ internal static class BridgeTests
         ModuleChecks.Run(Equal<bool>);
         NativeTimedTextChecks.Run(Equal<bool>);
         AssRenderingChecks.Run(Equal<bool>);
+        DanmakuFactoryChecks.Run(Equal<bool>);
         Console.WriteLine("PASS: " + checks + " input and metadata checks");
         return 0;
     }

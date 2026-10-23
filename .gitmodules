@@ -1,0 +1,3 @@
+[submodule "third_party/DanmakuFactory"]
+	path = third_party/DanmakuFactory
+	url = https://github.com/hihkm/DanmakuFactory.git

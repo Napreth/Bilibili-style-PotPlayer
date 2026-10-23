@@ -26,11 +26,13 @@
 .\build\package.ps1
 ```
 
-需要系统 Framework64 C# 编译器、x64 MinGW-w64 GCC、GNU Make、Bash、Python（含 pip）和 PowerShell。依赖来源及 SHA-256 在 `build/dependencies.lock.json`。首次构建下载固定 FFmpeg、libass 及字体依赖源码；Meson、Ninja 与 Inno Setup 编译器准备在 `.local/tools`，不修改全局 Python 环境。
+先执行 `git submodule update --init --recursive` 初始化 DanmakuFactory。构建需要 Git、系统 Framework64 C# 编译器、x64 MinGW-w64 GCC、GNU Make、Bash、CMake、Python（含 pip）和 PowerShell。依赖来源、Git 提交和 SHA-256 在 `build/dependencies.lock.json`。首次构建下载固定 FFmpeg、libass、字体及 PCRE2 依赖源码；Meson、Ninja 与 Inno Setup 编译器准备在 `.local/tools`，不修改全局 Python 环境。
 
 FFmpeg 动态库读取容器内文本字幕，无需安装 ffmpeg.exe。构建禁用 GPL、nonfree、version3、外部库和网络；保留容器读取、文本字幕解码及 SubRip 编码。原始源码、许可和配置随安装包提供。
 
 `build/libass.ps1` 构建 libass 共享库，固定选项在 `build/libass-options.json`。使用系统 DirectWrite 选字，FreeType、HarfBuzz 和 FriBidi 静态链接进 libass；无需安装字体引擎或调整 PATH。FreeType 采用 FTL 许可。可以用 ABI 兼容的共享库替换随包 DLL；源码与重建配置随包提供。
+
+`build/danmaku-factory.ps1` 从固定子模块构建转换 DLL，PCRE2 按锁定版本静态构建。安装包保存实际使用的核心源码快照、Git 版本及本地修改标记，不安装上游 CLI 或 GUI。许可证统一放在 `LICENSES/`；源码和构建脚本位于 `third-party/danmaku-factory/`。
 
 `build/out/runtime` 是开发运行目录，`build/out/package` 是安装载荷，`build/out/dist` 保存安装 EXE。构建产物不提交；仓库保留原生 DLL、第三方库与皮肤包。
 

@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          submodules: recursive
       - uses: msys2/setup-msys2@v2
         id: msys2
         with:
@@ -41,6 +42,7 @@ jobs:
           $env:PATH = "$env:MSYS2_LOCATION\mingw64\bin;" + $env:PATH
           ./build/ffmpeg.ps1 -CollectOnly
           ./build/libass.ps1 -Rebuild
+          ./build/danmaku-factory.ps1 -Rebuild
           ./build/native.ps1
           ./build/managed.ps1 -Test
           ./build/skin.ps1
