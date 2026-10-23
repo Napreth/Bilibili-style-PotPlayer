@@ -60,3 +60,18 @@ FFmpeg 动态库读取容器内文本字幕，无需安装 ffmpeg.exe。构建�
 缓存按 Windows runner、GCC 版本、依赖锁文件、构建脚本／选项及 DanmakuFactory 源码内容区分，不跨依赖版本回退。只保存可复用的 DLL／静态库、导入库、头文件、许可和源码包，不保存带绝对路径的 Meson／CMake 构建目录；恢复前校验全部文件 SHA-256。普通运行仍准备安装载荷并执行安装恢复检查。
 
 外部构建成功后立即保存缓存，后续项目编译或测试失败也不会丢失它。手动／tag 完整构建用独立缓存键刷新同一依赖版本，后续可见该缓存的分支运行使用最新一份。缓存被平台清理时会再次编译。CI 不自动发布 Release。
+
+可用本机安装的 `act` 执行同一份 Windows 工作流：
+
+```powershell
+.\scripts\test-ci.ps1
+# 再次执行以验证依赖缓存命中；Offline 避免重复拉取已下载的 Actions
+.\scripts\test-ci.ps1 -Offline
+# 完整构建，或模拟 tag 推送（不会创建真实 tag）
+.\scripts\test-ci.ps1 -Event workflow_dispatch -Offline
+.\scripts\test-ci.ps1 -Tag local-ci-check -Offline
+```
+
+使用 Windows 原生宿主模式，需要 Node.js、Git 及开发构建工具，不需要 Docker；Actions、依赖缓存和安装包工件保存在 `.local/act/`。脚本设置系统模块搜索路径，避免从 PowerShell 7 启动 `act` 时影响 Windows PowerShell 5.1；每次运行使用独立 ID，允许完整构建保存新缓存。脚本不载入本机 `.env`／`.secrets` 等配置，缓存和工件服务仅绑定到本机回环地址。本地执行可验证工作流步骤和分支，GitHub 托管 runner 的操作系统、权限及缓存作用域仍以远端运行为准。
+
+`act` 完整构建将三个工件导出到 `.local/act/artifacts/<run ID>/`，并逐项核对复制后的哈希。GitHub 使用 `actions/upload-artifact` 上传；本地导出避开 `act 0.2.89` 工件服务与新版上传客户端的协议／签名兼容问题，不模拟 GitHub 上传服务。

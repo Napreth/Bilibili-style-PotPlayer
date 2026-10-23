@@ -94,8 +94,11 @@ jobs:
         run: |
           ./scripts/check-package.ps1
           ./scripts/test-installation.ps1
+      - name: Export installer artifacts for local act
+        if: env.FULL_BUILD == 'true' && env.ACT == 'true'
+        run: ./scripts/export-ci-artifacts.ps1 -Destination $env:ACT_ARTIFACT_DIR
       - name: Upload installer and checksum manifest
-        if: env.FULL_BUILD == 'true'
+        if: env.FULL_BUILD == 'true' && env.ACT != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: BilibiliBehaviors-win-x64
