@@ -75,18 +75,12 @@ namespace BilibiliPotPlayer
         internal readonly SubtitleSlots Slots = new SubtitleSlots();
         internal readonly CaptionOptions Options;
         internal int Revision;
-        internal CaptionCatalog(IntPtr player, IMediaContext streams) : this(player, streams, CaptionOptions.Load(), LoadContainer, null) { }
+        internal CaptionCatalog(IntPtr player, IMediaContext streams) : this(player, streams, CaptionOptions.Load(), null, null) { }
         internal CaptionCatalog(IntPtr player, IMediaContext streams, CaptionOptions options, Func<TextSource, List<TextCue>> load, Action save)
         { this.player = player; this.streams = streams; Options = options; this.load = load; saveOptions = save ?? Options.Save; Slots.Multi = Options.Multilingual; }
         internal void DrainCompleted() { lock (sync) while (completed.Count > 0) completed.Dequeue()(); }
-        static List<TextCue> LoadContainer(TextSource source)
-        {
-            string text = Extract(source.Path, source.Stream);
-            if (String.IsNullOrWhiteSpace(text)) return new List<TextCue>();
-            TextSource parsed = TimedText.Parse(text, source.Title, ".srt")[0];
-            if (parsed.Error.Length > 0) throw new InvalidDataException(parsed.Error);
-            return parsed.Cues;
-        }
+        static List<TextSource> LoadContainer(TextSource source)
+        { return NativeTimedText.Read(source.Path,source.Stream,source.Title); }
         internal static bool CanUse(TextSource source)
         { return !source.Bitmap && !source.IntrinsicAdvanced && source.Category != TextCategory.Advanced && (source.Error.Length == 0 || source.Stream >= 0); }
         internal void Tick(long now)
@@ -104,13 +98,17 @@ namespace BilibiliPotPlayer
                 {
                     string id = Key(path) + ":stream:" + track.Ordinal;
                     if (Sources.Exists(s => s.Id == id)) continue;
-                    Sources.Add(new TextSource { Id = id, Title = track.Title.Length > 0 ? track.Title : track.Language.Length > 0 ? track.Language : "字幕 " + (track.Ordinal + 1), Detail = track.Codec + (track.Language.Length > 0 ? " · " + track.Language : ""), Format = track.Codec, Path = path, Stream = track.Ordinal, Bitmap = track.Bitmap, Error = track.Bitmap ? "图像字幕沿用 PotPlayer 原生渲染，暂不在此切换" : "", Category = TextCategory.Subtitle });
+                    Sources.Add(new TextSource { Id = id, Title = track.Title.Length > 0 ? track.Title : track.Language.Length > 0 ? track.Language : "字幕 " + (track.Ordinal + 1), Detail = track.Codec + (track.Language.Length > 0 ? " · " + track.Language : ""), Format = track.Codec, Path = path, Stream = track.Ordinal, Bitmap = track.Bitmap, Error = track.Bitmap ? "图像字幕沿用 PotPlayer 原生渲染，暂不在此切换" : "", Category = track.Bitmap ? TextCategory.Subtitle : TextCategory.Uncertain });
                     Revision++;
                 }
                 ApplyClasses(Sources);
                 ChooseInitial();
             }
             if (now >= nextScan) { nextScan = now + 3000; Discover(); }
+            if (!Sources.Exists(s => s.Stream >= 0 && s.Loading)) {
+                TextSource pending = Sources.Find(s => s.Stream >= 0 && !s.Bitmap && !s.Loaded && s.Error.Length == 0);
+                EnsureLoaded(pending);
+            }
             TextSource main = Find(Slots.Main), secondary = Find(Slots.Secondary);
             EnsureLoaded(main); EnsureLoaded(secondary);
             if (captionControlActive || !Options.SubtitlesEnabled) SetNativeVisible(false);
@@ -217,19 +215,45 @@ namespace BilibiliPotPlayer
             source.Loading = true; source.Error = ""; Status = ""; int version = generation;
             ThreadPool.QueueUserWorkItem(delegate
             {
-                List<TextCue> cues = null; string error = "";
-                try { cues = load(source); }
+                List<TextCue> cues = null; List<TextSource> tracks = null; string error = "";
+                try { if (load != null) cues = load(source); else { tracks = LoadContainer(source); cues = tracks[0].Cues; } }
                 catch (Exception ex) { error = ex.Message; }
                 lock (sync) completed.Enqueue(delegate
                 {
                     if (version != generation) return; source.Loading = false; source.Loaded = cues != null; source.Error = error;
-                    if (cues != null) { source.Cues.Clear(); source.Cues.AddRange(cues); }
+                    if (cues != null) {
+                        source.Cues.Clear(); source.Cues.AddRange(cues);
+                        if (tracks != null) ApplyContainer(source,tracks);
+                    }
                     else { source.Enabled = false; Status = error; }
                     if (cues == null && (Slots.Main == source.Id || Slots.Secondary == source.Id))
                     { Slots.Select(source.Id); if (Slots.Main == null) { captionControlActive = false; RestoreNative(); } }
-                    Revision++;
+                    ChooseInitial(); Revision++;
                 });
             });
+        }
+        internal void ApplyContainer(TextSource source, List<TextSource> tracks)
+        {
+            bool wasEnabled = source.Enabled;
+            for (int i = 0; i < tracks.Count; i++) {
+                TextSource parsed = tracks[i], target;
+                if (i == 0) target = source;
+                else {
+                    string id = source.Id+":part:"+parsed.AutoCategory;
+                    target = Find(id);
+                    if (target == null) { target = new TextSource { Id = id, Title = source.Title, Path = source.Path, Stream = source.Stream }; Sources.Add(target); }
+                    target.Cues.Clear(); target.Cues.AddRange(parsed.Cues);
+                }
+                target.Events.Clear(); target.Events.AddRange(parsed.Events); target.Analysis = parsed.Analysis; target.AutoCategory = parsed.AutoCategory;
+                target.IntrinsicAdvanced = parsed.IntrinsicAdvanced; target.Category = parsed.Category; target.Detail = parsed.Detail; target.Loaded = true; target.Error = "";
+                int manual;
+                if (!target.IntrinsicAdvanced && Options.Classes.TryGetValue(target.Id,out manual) && manual >= 0 && manual <= 3) target.Category = (TextCategory)manual;
+                // Completion may change the automatic class, but cannot reverse a user's
+                // explicit off switch while decoding was in progress.
+                target.Enabled = target.Category == TextCategory.Danmaku && !target.IntrinsicAdvanced && (i == 0 && Options.Classes.ContainsKey(target.Id) ? wasEnabled : true);
+                if (target.Category != TextCategory.Subtitle && (Slots.Main == target.Id || Slots.Secondary == target.Id)) Slots.Select(target.Id);
+            }
+            if (Slots.Main == null && captionControlActive) { captionControlActive = false; RestoreNative(); }
         }
         internal static string Extract(string file, int ordinal)
         { return NativeTimedText.Extract(file, ordinal); }

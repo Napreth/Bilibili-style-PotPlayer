@@ -24,7 +24,7 @@ PotPlayer 的 .as 播放扩展启动 `BilibiliBehaviors.exe --from-player`。薄
 ## 原生模块
 
 - `PlayerLayout.dll` 保留已有提交前几何和重入保护。
-- `BilibiliTimedText.dll` 使用 FFmpeg 公共 API 枚举第 n 条字幕、解码文本并转换成 SRT 回调。C# 不复制 FFmpeg ABI 结构体。只接受本地文件，并限制提取时长、内容大小和条目数。
+- `BilibiliTimedText.dll` 使用 FFmpeg 公共 API 枚举第 n 条字幕，回传保留样式头和覆盖标签的 ASS 事件给统一分类器，并保留诊断用 SRT 导出。C# 不复制 FFmpeg ABI 结构体。只接受本地文件，并限制提取时长、内容大小和条目数。识别和拆分规则见 [字幕与弹幕自动分类](algorithms/caption-classification.md)。
 - 三个 FFmpeg LGPL DLL 独立分发并可替换；精确源码、配置和许可随安装包提供。系统 ffmpeg.exe 不参与运行。
 
 ## 构建与皮肤

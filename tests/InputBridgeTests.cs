@@ -36,6 +36,10 @@ internal static class BridgeTests
         if (args.Length > 0 && args[0] == "--status") { Status(); return 0; }
         if (args.Length > 0 && args[0] == "--ui-status") { UiStatus(); return 0; }
         if (args.Length > 1 && args[0] == "--caption-preview") { CaptionPreview(args[1]); return 0; }
+        if (args.Length > 1 && args[0] == "--classify-caption") {
+            foreach (TextSource source in TimedText.Read(args[1])) Console.WriteLine(new JavaScriptSerializer().Serialize(new { source.Title, Category=source.Category.ToString(), Events=source.Events.Count, Playable=source.Cues.Count, source.Analysis }));
+            return 0;
+        }
         if (args.Length > 0 && args[0] == "--caption-menu") { foreach (IntPtr player in Native.PlayerWindows()) { Console.WriteLine("Player " + player); foreach (NativeMenuSnapshot.Item item in NativeCaptionAccess.Read(player)) if (item.Command == 10126 || item.Command >= 29000 && item.Command < 29400) Console.WriteLine(item.Command + " " + item.Checked + " " + item.Enabled + " " + item.Text); } return 0; }
         if (args.Length > 0 && (args[0] == "--metadata" || args[0] == "--media-path")) { Metadata(args[0] == "--media-path"); return 0; }
         if (args.Length > 1 && args[0] == "--inspect") { PrintCatalog(MediaCatalog.Read(System.IO.Path.GetFullPath(args[1]))); return 0; }
@@ -43,7 +47,7 @@ internal static class BridgeTests
         {
             string captionPath = System.IO.Path.GetFullPath(args[1]); MediaCatalog catalog = MediaCatalog.Read(captionPath);
             foreach (ContainerCaption track in catalog.Text)
-            { List<TextSource> parsed = TimedText.Parse(CaptionCatalog.Extract(captionPath, track.Ordinal), track.Title, ".srt"); Console.WriteLine(new JavaScriptSerializer().Serialize(new { track.Ordinal, track.Title, track.Language, track.Codec, track.Default, Cues = parsed[0].Cues.Count, First = parsed[0].Cues.Count == 0 ? "" : parsed[0].Cues[0].Text })); }
+            { foreach (TextSource parsed in NativeTimedText.Read(captionPath, track.Ordinal, track.Title)) Console.WriteLine(new JavaScriptSerializer().Serialize(new { track.Ordinal, track.Title, track.Language, track.Codec, track.Default, Category=parsed.Category.ToString(), Events=parsed.Events.Count, Cues = parsed.Cues.Count, parsed.Analysis })); }
             return 0;
         }
         RightGesture r = new RightGesture(300);
@@ -216,6 +220,7 @@ internal static class BridgeTests
         DolbyVisionProbeChecks.Run(Equal<bool>);
         SphericalVideoProbeChecks.Run(Equal<bool>);
         TimedTextChecks.Run(Equal<bool>);
+        CaptionClassificationChecks.Run(Equal<bool>);
         ModuleChecks.Run(Equal<bool>);
         NativeTimedTextChecks.Run(Equal<bool>);
         Console.WriteLine("PASS: " + checks + " input and metadata checks");

@@ -20,3 +20,5 @@ Dialogue: 0,0:00:02.00,0:00:05.00,Default,,0,0,0,,日本語テキスト
 if ($LASTEXITCODE -ne 0) { throw 'Matroska fixture generation failed.' }
 & $FFmpeg -nostdin -hide_banner -loglevel error -y -i "$scratch/first.srt" -map 0:s -c:s mov_text "$repo/tests/fixtures/text-track.mp4"
 if ($LASTEXITCODE -ne 0) { throw 'MP4 fixture generation failed.' }
+& $FFmpeg -nostdin -hide_banner -loglevel error -y -i "$repo/tests/fixtures/classification.ass" -map 0:s -c:s copy "$repo/tests/fixtures/classification.mkv"
+if ($LASTEXITCODE -ne 0) { throw 'Mixed ASS classification fixture generation failed.' }

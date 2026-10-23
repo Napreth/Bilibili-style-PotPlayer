@@ -1,0 +1,36 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,20,20,30,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.25,0:00:03.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 0
+Dialogue: 0,0:00:01.25,0:00:03.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 0
+Dialogue: 0,0:00:05.25,0:00:07.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 1
+Dialogue: 0,0:00:05.25,0:00:07.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 1
+Dialogue: 0,0:00:09.25,0:00:11.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 2
+Dialogue: 0,0:00:09.25,0:00:11.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 2
+Dialogue: 0,0:00:13.25,0:00:15.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 3
+Dialogue: 0,0:00:13.25,0:00:15.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 3
+Dialogue: 0,0:00:17.25,0:00:19.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 4
+Dialogue: 0,0:00:17.25,0:00:19.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 4
+Dialogue: 0,0:00:21.25,0:00:23.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 5
+Dialogue: 0,0:00:21.25,0:00:23.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 5
+Dialogue: 0,0:00:25.25,0:00:27.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 6
+Dialogue: 0,0:00:25.25,0:00:27.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 6
+Dialogue: 0,0:00:29.25,0:00:31.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 7
+Dialogue: 0,0:00:29.25,0:00:31.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 7
+Dialogue: 0,0:00:33.25,0:00:35.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 8
+Dialogue: 0,0:00:33.25,0:00:35.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 8
+Dialogue: 0,0:00:37.25,0:00:39.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 9
+Dialogue: 0,0:00:37.25,0:00:39.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 9
+Dialogue: 0,0:00:41.25,0:00:43.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 10
+Dialogue: 0,0:00:41.25,0:00:43.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 10
+Dialogue: 0,0:00:45.25,0:00:47.75,Default,,0,0,0,,{\pos(960,1000)}Dialogue 11
+Dialogue: 0,0:00:45.25,0:00:47.75,Default,,0,0,0,,{\move(1920,100,-300,100)}Comment 11
+Dialogue: 0,0:00:01.25,0:00:03.75,Default,,0,0,0,,{\t(\frz360)}Effect
+Dialogue: 0,0:00:01.25,0:00:03.75,Default,,0,0,0,,{\fad(200,100)}Effect
+Dialogue: 0,0:00:01.25,0:00:03.75,Default,,0,0,0,,{\move(1920,100,-300,400)}Effect

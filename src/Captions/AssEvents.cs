@@ -1,0 +1,187 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text.RegularExpressions;
+
+namespace BilibiliPotPlayer
+{
+    // Read tags before plain-text conversion. Unsupported critical structures stay
+    // uncertain; this is an analyzer, never an ASS script or drawing executor.
+    internal static class AssEvents
+    {
+        sealed class Style
+        {
+            internal int Alignment;
+            internal double Font = 25, MarginL = 10, MarginR = 10, MarginV = 10;
+            internal Dictionary<string,double> Values = Defaults();
+        }
+        sealed class Tag { internal string Name, Value; internal bool Valid = true; }
+        static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+        static readonly string[] Names = { "fscx","fscy","alpha","iclip","move","fade","clip","xbord","ybord","xshad","yshad","frx","fry","frz","bord","shad","blur","fax","fay","fsp","pos","fad","org","pbo","an","fs","fr","1c","2c","3c","4c","1a","2a","3a","4a","kf","ko","be","fn","p","k","K","t","r","a","c","b","i","u","s","q" };
+        static Dictionary<string,double> Defaults()
+        { return new Dictionary<string,double> { {"fs",25},{"fscx",100},{"fscy",100},{"frz",0},{"frx",0},{"fry",0},{"fax",0},{"fay",0},{"fsp",0},{"1c",0xFFFFFF},{"2c",0xFF},{"3c",0},{"4c",0},{"1a",0},{"2a",0},{"3a",0},{"4a",0},{"bord",0},{"shad",0},{"xbord",0},{"ybord",0},{"xshad",0},{"yshad",0},{"blur",0},{"be",0} }; }
+        static string Field(string[] fields, string[] values, string name, string fallback = "")
+        { int i = Array.FindIndex(fields, f => f.Trim().Equals(name,StringComparison.OrdinalIgnoreCase)); return i >= 0 && i < values.Length ? values[i].Trim() : fallback; }
+        static bool Number(string text, out double n)
+        { return Double.TryParse(text,NumberStyles.Float,Inv,out n) && !Double.IsNaN(n) && !Double.IsInfinity(n); }
+        static double Get(string[] fields, string[] values, string name, double fallback)
+        { double n; return Number(Field(fields,values,name),out n) ? n : fallback; }
+        static double Color(string text, double fallback)
+        {
+            long n; string s = text.Trim().TrimEnd('&');
+            if (s.StartsWith("&H",StringComparison.OrdinalIgnoreCase)) return Int64.TryParse(s.Substring(2),NumberStyles.HexNumber,Inv,out n) ? n : fallback;
+            return Int64.TryParse(s,out n) ? n : fallback;
+        }
+        internal static void Parse(string value, TextSource source)
+        {
+            source.Format = "ASS / SSA";
+            double width = 0, height = 0; string section = "";
+            string[] fields = { "Layer","Start","End","Style","Name","MarginL","MarginR","MarginV","Effect","Text" }, styleFields = new string[0];
+            var styles = new Dictionary<string,Style>(StringComparer.OrdinalIgnoreCase);
+            bool declared = Regex.IsMatch(value,@"(?im)^(?:;|Title:|Original Script:|Script Updated By:).*?(?:danmaku|danmu|弹幕|bilibili.*(?:xml|comment))",RegexOptions.None,TimeSpan.FromMilliseconds(200));
+            foreach (string raw in value.Replace("\r","").Split('\n')) {
+                string line = raw.Trim();
+                if (line.StartsWith("[")) { section = line.ToLowerInvariant(); continue; }
+                if (section == "[script info]") {
+                    if (line.StartsWith("PlayResX:",StringComparison.OrdinalIgnoreCase)) Number(line.Substring(9),out width);
+                    if (line.StartsWith("PlayResY:",StringComparison.OrdinalIgnoreCase)) Number(line.Substring(9),out height);
+                }
+                if (section == "[v4+ styles]" || section == "[v4 styles]") {
+                    if (line.StartsWith("Format:",StringComparison.OrdinalIgnoreCase)) styleFields = line.Substring(7).Split(',');
+                    if (line.StartsWith("Style:",StringComparison.OrdinalIgnoreCase)) {
+                        string[] v = line.Substring(6).Split(','); Style style = new Style();
+                        style.Alignment = (int)Get(styleFields,v,"Alignment",2);
+                        if (section == "[v4 styles]") style.Alignment = LegacyAlignment(style.Alignment);
+                        style.Font = Get(styleFields,v,"Fontsize",25); style.Values["fs"] = style.Font;
+                        style.MarginL = Get(styleFields,v,"MarginL",10); style.MarginR = Get(styleFields,v,"MarginR",10); style.MarginV = Get(styleFields,v,"MarginV",10);
+                        style.Values["fscx"] = Get(styleFields,v,"ScaleX",100); style.Values["fscy"] = Get(styleFields,v,"ScaleY",100); style.Values["frz"] = Get(styleFields,v,"Angle",0);
+                        style.Values["bord"] = Get(styleFields,v,"Outline",0); style.Values["shad"] = Get(styleFields,v,"Shadow",0);
+                        string[] colorNames = { "PrimaryColour","SecondaryColour","OutlineColour","BackColour" };
+                        for (int k = 1; k <= 4; k++) { double color = Color(Field(styleFields,v,colorNames[k-1]),style.Values[k+"c"]); style.Values[k+"c"] = (long)color & 0xFFFFFF; style.Values[k+"a"] = ((long)color >> 24) & 255; }
+                        styles[Field(styleFields,v,"Name","Default")] = style;
+                    }
+                }
+                if (section != "[events]") continue;
+                if (line.StartsWith("Format:",StringComparison.OrdinalIgnoreCase)) { fields = line.Substring(7).Split(','); continue; }
+                if (!line.StartsWith("Dialogue:",StringComparison.OrdinalIgnoreCase)) continue;
+                string[] parts = line.Substring(9).Split(new[] {','},fields.Length);
+                if (parts.Length != fields.Length) continue;
+                string body = Field(fields,parts,"Text"), styleName = Field(fields,parts,"Style","Default");
+                Style selected; if (!styles.TryGetValue(styleName,out selected)) selected = new Style();
+                TextCue cue = new TextCue { Start = TimedText.Time(Field(fields,parts,"Start")), End = TimedText.Time(Field(fields,parts,"End")), RawContent = body, Text = TimedText.Plain(body), Style = styleName, Layer = (int)Get(fields,parts,"Layer",Get(fields,parts,"Marked",0)), Origin = "ASS", Motion = CueMotion.Static, Declared = declared ? (TextCategory?)TextCategory.Danmaku : null };
+                Analyze(cue,selected,styles,width,height,Get(fields,parts,"MarginL",0),Get(fields,parts,"MarginR",0),Get(fields,parts,"MarginV",0),Field(fields,parts,"Effect"));
+                TimedText.Add(source,cue);
+            }
+        }
+        static int LegacyAlignment(int a) { return a >= 1 && a <= 3 ? a : a >= 5 && a <= 7 ? a + 2 : a >= 9 && a <= 11 ? a - 5 : 0; }
+        static List<Tag> Tags(string text)
+        {
+            List<Tag> result = new List<Tag>();
+            for (int i = 0; i < text.Length; i++) {
+                if (text[i] != '\\') continue;
+                i++; string name = null;
+                foreach (string n in Names) if (i + n.Length <= text.Length && String.CompareOrdinal(text,i,n,0,n.Length) == 0) { name = n; break; }
+                if (name == null) { while (i < text.Length && text[i] != '\\') i++; i--; continue; }
+                i += name.Length; int start = i, depth = 0;
+                while (i < text.Length) { char c = text[i]; if (c == '\\' && depth == 0) break; if (c == '(') depth++; if (c == ')') depth--; i++; }
+                result.Add(new Tag { Name = name, Value = text.Substring(start,i-start).Trim(), Valid = depth == 0 }); i--;
+            }
+            return result;
+        }
+        static bool Args(Tag tag, out double[] values)
+        {
+            values = null; string s = tag.Value;
+            if (!tag.Valid || !s.StartsWith("(") || !s.EndsWith(")")) return false;
+            string[] parts = s.Substring(1,s.Length-2).Split(','); values = new double[parts.Length];
+            for (int i = 0; i < parts.Length; i++) if (!Number(parts[i],out values[i])) return false;
+            return true;
+        }
+        static bool StyleValue(Tag tag, Dictionary<string,double> state, out string key, out double n)
+        {
+            key = tag.Name == "c" ? "1c" : tag.Name == "fr" ? "frz" : tag.Name;
+            n = 0;
+            if (!state.ContainsKey(key) && key != "alpha") return false;
+            if (key.EndsWith("c") || key.EndsWith("a") || key == "alpha") { n = Color(tag.Value,Double.NaN); return !Double.IsNaN(n); }
+            return Number(tag.Value,out n);
+        }
+        static void Analyze(TextCue cue, Style style, Dictionary<string,Style> styles, double w, double h, double ml, double mr, double mv, string effect)
+        {
+            Dictionary<string,double> state = new Dictionary<string,double>(style.Values);
+            cue.Alignment = style.Alignment; double x = 0, y = 0; bool positioned = false; int positions = 0;
+            if (!String.IsNullOrEmpty(effect)) cue.Effects |= effect.StartsWith("Banner",StringComparison.OrdinalIgnoreCase) || effect.StartsWith("Scroll",StringComparison.OrdinalIgnoreCase) ? CueEffects.Animation : CueEffects.Unparsed;
+            foreach (Match block in Regex.Matches(cue.RawContent,@"\{([^}]*)\}",RegexOptions.None,TimeSpan.FromMilliseconds(200))) foreach (Tag tag in Tags(block.Groups[1].Value)) {
+                double[] v; double n; string key;
+                if (!tag.Valid) { cue.Effects |= CueEffects.Unparsed; continue; }
+                if (tag.Name == "r") {
+                    Style reset; if (tag.Value.Length == 0) reset = style; else if (!styles.TryGetValue(tag.Value,out reset)) { cue.Effects |= CueEffects.Unparsed; continue; }
+                    state = new Dictionary<string,double>(reset.Values); cue.Alignment = reset.Alignment;
+                } else if (tag.Name == "an" || tag.Name == "a") { if (Number(tag.Value,out n)) cue.Alignment = tag.Name == "a" ? LegacyAlignment((int)n) : (int)n; else cue.Effects |= CueEffects.Unparsed; }
+                else if (tag.Name == "pos" || tag.Name == "move") {
+                    if (!Args(tag,out v) || (tag.Name == "pos" ? v.Length != 2 : v.Length != 4 && v.Length != 6) || ++positions > 1) { cue.Effects |= CueEffects.Unparsed; continue; }
+                    x = v[0]; y = v[1]; positioned = true;
+                    if (tag.Name == "move" && (v[2] != x || v[3] != y)) {
+                        double duration = (cue.End - cue.Start)*1000, t1 = v.Length == 6 ? v[4] : 0, t2 = v.Length == 6 ? v[5] : duration;
+                        if (t1 == 0 && t2 == 0) t2 = duration;
+                        if (t2 < t1) { cue.Effects |= CueEffects.Unparsed; continue; }
+                        if (t1 >= duration) continue;
+                        if (t2 <= 0) { x = v[2]; y = v[3]; continue; }
+                        if (v[3] != y || t1 > 0 || t2 < duration) cue.Effects |= CueEffects.Animation;
+                        else { cue.Motion = CueMotion.Horizontal; cue.Mode = v[2] < x ? 1 : 6; }
+                    }
+                } else if (tag.Name == "fad") {
+                    if (!Args(tag,out v) || v.Length != 2 || v[0] < 0 || v[1] < 0) cue.Effects |= CueEffects.Unparsed;
+                    else if (v[0] > 0 || v[1] > 0) cue.Effects |= CueEffects.Animation;
+                } else if (tag.Name == "fade") {
+                    if (!Args(tag,out v) || v.Length != 7 || v[3] > v[4] || v[4] > v[5] || v[5] > v[6]) cue.Effects |= CueEffects.Unparsed;
+                    else if (v[0] != v[1] && v[4] > 0 && v[3] < (cue.End-cue.Start)*1000 || v[1] != v[2] && v[6] > 0 && v[5] < (cue.End-cue.Start)*1000) cue.Effects |= CueEffects.Animation;
+                } else if (tag.Name == "t") Transform(cue,tag,state);
+                else if (tag.Name == "p") { if (!Number(tag.Value,out n)) cue.Effects |= CueEffects.Unparsed; else if (n > 0) cue.Effects |= CueEffects.Drawing; }
+                else if (tag.Name == "clip" || tag.Name == "iclip") {
+                    if (Args(tag,out v) && v.Length == 4 || Regex.IsMatch(tag.Value,@"^\((?:\d+\s*,\s*)?m\s+-?\d",RegexOptions.None,TimeSpan.FromMilliseconds(200))) cue.Effects |= CueEffects.Drawing;
+                    else cue.Effects |= CueEffects.Unparsed;
+                }
+                else if (tag.Name == "k" || tag.Name == "K" || tag.Name == "kf" || tag.Name == "ko") { if (!Number(tag.Value,out n)) cue.Effects |= CueEffects.Unparsed; else if (n > 0 && (state["1c"] != state["2c"] || tag.Name == "ko" && state["bord"] > 0)) cue.Effects |= CueEffects.Animation; }
+                else if (StyleValue(tag,state,out key,out n)) { if (key == "alpha") for (int k = 1; k <= 4; k++) state[k+"a"] = n; else state[key] = n; }
+            }
+            if (cue.RawContent.IndexOf('{') >= 0 && !Regex.IsMatch(cue.RawContent,@"^(?:[^{}]|\{[^{}]*\})*$",RegexOptions.None,TimeSpan.FromMilliseconds(200))) cue.Effects |= CueEffects.Unparsed;
+            cue.Size = (int)state["fs"]; int bgr = (int)state["1c"]; cue.Color = (bgr & 255)<<16 | bgr & 0xFF00 | bgr>>16;
+            if (!positioned && cue.Alignment >= 1 && cue.Alignment <= 9 && w > 0 && h > 0) {
+                int col = (cue.Alignment-1)%3, row = (cue.Alignment-1)/3;
+                x = col == 0 ? (ml > 0 ? ml : style.MarginL) : col == 2 ? w-(mr > 0 ? mr : style.MarginR) : w/2;
+                y = row == 0 ? h-(mv > 0 ? mv : style.MarginV) : row == 2 ? (mv > 0 ? mv : style.MarginV) : h/2; positioned = true;
+            }
+            if (positioned && w > 0 && h > 0 && cue.Alignment >= 1 && cue.Alignment <= 9) {
+                // Normalize the approximate text-area center rather than mixing top,
+                // middle and baseline anchors in the same vertical histogram.
+                double textHeight = state["fs"] * state["fscy"]/100 * 1.2 * cue.Text.Split('\n').Length;
+                int row = (cue.Alignment-1)/3;
+                cue.X = x/w; cue.Y = (y + (row == 2 ? textHeight/2 : row == 0 ? -textHeight/2 : 0))/h; cue.PositionKnown = true;
+            }
+            if (cue.Motion == CueMotion.Static) cue.Mode = cue.Alignment >= 7 ? 5 : 4;
+        }
+        static void Transform(TextCue cue, Tag tag, Dictionary<string,double> state)
+        {
+            string s = tag.Value; int slash = s.IndexOf('\\');
+            if (!s.StartsWith("(") || !s.EndsWith(")") || slash < 0) { cue.Effects |= CueEffects.Unparsed; return; }
+            string prefix = s.Substring(1,slash-1).Trim().TrimEnd(','); string[] times = prefix.Length == 0 ? new string[0] : prefix.Split(',');
+            double t1 = 0, t2 = (cue.End-cue.Start)*1000, accel = 1, n;
+            if (times.Length > 3) { cue.Effects |= CueEffects.Unparsed; return; }
+            for (int i = 0; i < times.Length; i++) if (!Number(times[i],out n)) { cue.Effects |= CueEffects.Unparsed; return; }
+            if (times.Length == 1) Number(times[0],out accel);
+            if (times.Length >= 2) { Number(times[0],out t1); Number(times[1],out t2); }
+            if (times.Length == 3) Number(times[2],out accel);
+            if (accel <= 0 || t2 < t1) { cue.Effects |= CueEffects.Unparsed; return; }
+            if (t2 == 0 && t1 == 0) t2 = (cue.End-cue.Start)*1000;
+            if (t1 >= (cue.End-cue.Start)*1000 || t2 <= 0) return;
+            List<Tag> targets = Tags(s.Substring(slash,s.Length-slash-1));
+            if (targets.Count == 0) cue.Effects |= CueEffects.Unparsed;
+            foreach (Tag target in targets) {
+                string key;
+                if (target.Name == "clip" || target.Name == "iclip") { cue.Effects |= CueEffects.Animation; continue; }
+                if (!target.Valid || !StyleValue(target,state,out key,out n)) { cue.Effects |= CueEffects.Unparsed; continue; }
+                if (key == "alpha") { for (int k = 1; k <= 4; k++) if (state[k+"a"] != n) cue.Effects |= CueEffects.Animation; }
+                else if (state[key] != n) cue.Effects |= CueEffects.Animation;
+            }
+        }
+    }
+}

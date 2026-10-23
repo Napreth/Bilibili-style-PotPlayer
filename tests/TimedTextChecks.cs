@@ -11,7 +11,7 @@ internal static class TimedTextChecks
         Action<bool, string> check = (value, message) => equal(true, value, message);
         string srt = "1\n00:00:01,000 --> 00:00:05,200\n你好，世界\n\n2\n00:00:10,000 --> 00:00:15,000\nfunction is just subtitle text\n";
         TextSource source = TimedText.Parse(srt, "renamed.xml", ".xml")[0];
-        check(source.Category == TextCategory.Subtitle && source.Cues.Count == 2, "content signature overrides misleading file suffix");
+        check(source.Category == TextCategory.Uncertain && source.Cues.Count == 2, "content signature overrides misleading suffix but two unlabelled cues remain uncertain");
         check(source.Cues[0].Start == 1 && source.Cues[0].End == 5.2, "SRT timestamps retain millisecond precision");
         check(source.Cues[1].Text.StartsWith("function"), "spoken words are not treated as executable code");
         check(TimedText.Parse(srt.Replace("你好，世界", "&lt;hello&gt; &amp; world"), "x.srt", ".srt")[0].Cues[0].Text == "<hello> & world", "subtitle entities decode after markup removal");
@@ -30,8 +30,8 @@ internal static class TimedTextChecks
         check(TimedText.Parse("<i><d p='NaN,1,25,1'>bad</d><d p='2,1,25,1'>good</d></i>", "x.xml", ".xml")[0].Cues.Count == 1, "malformed danmaku time does not poison following entry");
         string ass = "[Script Info]\nTitle: anime\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:08.00,Default,,0,0,0,,{\\b1}a,b\\Nc\n";
         TextSource assSource = TimedText.Parse(ass, "x.ass", ".ass")[0];
-        check(assSource.Category == TextCategory.Subtitle && assSource.Cues[0].Text == "a,b\nc", "ASS styling does not imply danmaku and commas preserved");
-        check(TimedText.Parse(ass.Replace("{\\b1}", "{\\p1}"), "x.ass", ".ass")[0].Category == TextCategory.Uncertain, "drawing ASS is ambiguous rather than silently misclassified");
+        check(assSource.Category == TextCategory.Uncertain && assSource.Cues[0].Text == "a,b\nc", "one styled ASS event preserves text and remains uncertain");
+        check(TimedText.Parse(ass.Replace("{\\b1}", "{\\p1}"), "x.ass", ".ass")[0].Category == TextCategory.Advanced, "drawing ASS is advanced even without provenance");
         string moving = ass.Replace("{\\b1}", "{\\move(640,20,-100,20)}");
         check(TimedText.Parse(moving + moving.Substring(moving.IndexOf("Dialogue:")) + moving.Substring(moving.IndexOf("Dialogue:")), "x.ass", ".ass")[0].Category == TextCategory.Uncertain, "moving ASS without provenance needs user classification");
         check(TimedText.Parse(ass.Replace("Title: anime", "Title: danmaku export"), "x.ass", ".ass")[0].Category == TextCategory.Danmaku, "declared simple danmaku ASS detected");
