@@ -6,17 +6,17 @@ namespace BilibiliPotPlayer
     internal static class InputPolicy
     {
         internal static KeyRoute Route(int key, bool shift, bool ctrl, bool alt, bool windows)
+        { return Route(key, shift, ctrl, alt, windows, ShortcutOptions.Defaults()); }
+        internal static KeyRoute Route(int key, bool shift, bool ctrl, bool alt, bool windows, ShortcutOptions shortcuts)
         {
             if (windows || key == 0x5B || key == 0x5C || key == 0x10 || key == 0x11 || key == 0x12 || key >= 0xA0 && key <= 0xA5)
                 return KeyRoute.Native;
             if (alt && (key == 0x09 || key == 0x73 || key == 0x1B || key == 0x20) || ctrl && key == 0x1B)
                 return KeyRoute.Native;
+            if (shortcuts.Find(key, (shift ? 1 : 0) | (ctrl ? 2 : 0) | (alt ? 4 : 0)) != PlayerAction.None) return KeyRoute.Mapped;
             if (key >= 0x70 && key <= 0x7B) return key == 0x74 ? KeyRoute.Blocked : KeyRoute.Native;
             if (ctrl || alt) return KeyRoute.Blocked;
-            if (shift) return key == 0x31 || key == 0x32 ? KeyRoute.Mapped : KeyRoute.Blocked;
-            if (key == 0x25 || key == 0x27 || key == 0x26 || key == 0x28 || key == 0x20 ||
-                key == 0xBC || key == 0xDB || key == 0xBE || key == 0xDD || key == 0x1B ||
-                key == 0x43 || key == 0x53 || key == 0x44 || key == 0x46 || key == 0x4D || key == 0x58 || key == 0x0D) return KeyRoute.Mapped;
+            if (!shift && key == 0x0D) return KeyRoute.Mapped; // Legacy no-op, until explicitly assigned.
             return KeyRoute.Blocked;
         }
     }

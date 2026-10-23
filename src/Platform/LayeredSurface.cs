@@ -27,7 +27,7 @@ namespace BilibiliPotPlayer
                 if (embedded)
                 {
                     p.Style = (p.Style & ~unchecked((int)0x80000000)) | 0x44000000;
-                    p.ExStyle &= ~8; p.Parent = embeddedParent;
+                    p.ExStyle &= ~8; if (embeddedParent != IntPtr.Zero) p.Parent = embeddedParent;
                 }
                 return p;
             }

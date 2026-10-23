@@ -11,6 +11,7 @@ PotPlayer 的 .as 播放扩展启动 `BilibiliBehaviors.exe --from-player`。薄
 | Media | Contracts、Platform | MediaInfo、元数据补充探测、音视频选轨及界面 |
 | Captions | Contracts、Platform | 时间文本、来源、主副选择、弹幕、设置及 FFmpeg／libass 适配调用 |
 | Playback | Contracts、Platform、Media | 控制栏、进度、音量、倍速及媒体参数绘制 |
+| Settings | Contracts、Platform、Media、Captions | 实例右键菜单、非模态设置窗口、快捷键编辑、色彩音效及视频详情 |
 | Runtime | 上述模块 | 模块版本检查、单实例、窗口会话、统一更新和释放 |
 
 程序集完整名称均为 `BilibiliBehaviors.模块名.dll`。构建为 internal 类型生成有限的 InternalsVisibleTo，只开放给引用图中直接依赖它的模块及测试程序集。新增依赖必须修改构建图；不扫描并执行任意 DLL。
@@ -31,6 +32,10 @@ PotPlayer 的 .as 播放扩展启动 `BilibiliBehaviors.exe --from-player`。薄
 
 ## 构建与皮肤
 
-`build/managed.ps1` 按引用顺序生成 8 个 DLL、入口和测试 EXE。测试引用实际业务 DLL。`build/package.ps1` 组合原生模块、DLL、DSF 和许可源码，用固定版本 Inno Setup 生成安装包。
+`build/managed.ps1` 按引用顺序生成 9 个 DLL、入口和测试 EXE。测试引用实际业务 DLL。`build/package.ps1` 组合原生模块、DLL、DSF 和许可源码，用固定版本 Inno Setup 生成安装包。
+
+Settings 的顶层窗口使用 Win32 owner 绑定对应 PotPlayer HWND，不使用模态对话框或全局常驻置顶。Runtime 持有并释放每个实例的窗口；全屏时同步所属播放器的置顶状态。设置窗口获得焦点时不参与播放器键盘路由，点击播放器表面可把操作交还播放器。字幕样式编辑器作为子控件复用 Captions 的绘制、配置及 libass 预览。
+
+`ShortcutStore` 位于 Contracts，输入与设置共用一个当前用户配置。快捷键先验证冲突和系统保留组合，再原子写入 `shortcut-options.json`，成功后更新内存及版本号；保存失败不改变运行映射。Input 按操作而非固定键码管理长按与松开，配置变更和失焦会取消手势并恢复临时倍速。F5 和 Esc 固定保留。
 
 皮肤源码由固定 Default.dsf 底包和 9 个覆盖文件组成。构建验证底包哈希，合并后生成包含 47 个文件的完整 DSF。未修改的默认图片和其他布局保留在底包中。

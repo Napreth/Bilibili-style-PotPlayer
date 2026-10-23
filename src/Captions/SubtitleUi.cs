@@ -53,6 +53,20 @@ namespace BilibiliPotPlayer
         TextSource dragSource;
         Hit slider, pressed;
         int picker;
+        bool editorMode;
+        internal Action<bool> OpenSettings;
+        internal Action EditorReset;
+        internal void AttachEditor(Control parent, IntPtr player, bool danmaku)
+        {
+            editorMode = true; Player = player; page = danmaku ? 2 : 1; Parent = parent;
+            english = false;
+            ResizeEditor(); parent.SizeChanged += ResizeParent; Show();
+        }
+        void ResizeParent(object sender, EventArgs args) { ResizeEditor(); }
+        void ResizeEditor()
+        { if (Parent == null) return; scale = Math.Min(Math.Max(96, Native.GetDpiForWindow(Player)) / 96f, Math.Max(1, Parent.ClientSize.Width - SystemInformation.VerticalScrollBarWidth) / 620f); Size = new Size((int)(620 * scale), (int)(656 * scale)); Invalidate(); }
+        void OpenStyle(bool danmaku)
+        { if (OpenSettings != null) { Dismiss(); OpenSettings(danmaku); } else { page = danmaku ? 2 : 1; picker = 0; } }
         readonly Color accent = Color.FromArgb(251, 114, 153), selected = Color.FromArgb(0, 174, 236), muted = Color.FromArgb(129, 131, 140);
         internal SubtitlePopup(SubtitleButton button, CaptionCatalog catalog) : base("字幕和弹幕菜单", true) { this.button = button; this.catalog = catalog; }
         internal bool IsHoverTarget(IntPtr player, Native.Point point)
@@ -195,7 +209,7 @@ namespace BilibiliPotPlayer
             Link(graphics, L("语音生成字幕 · 未接入", "Speech subtitles · unavailable"), 66, 384, 183, delegate { }, false);
             Link(graphics, L("从文件加载字幕/弹幕", "Load subtitles / danmaku"), 66, 412, 190, Import);
             DanmakuMain(graphics);
-            Nut(graphics, 267, 446, delegate { page = 1; picker = 0; }); Nut(graphics, 576, 520, delegate { page = 2; picker = 0; });
+            Nut(graphics, 267, 446, delegate { OpenStyle(false); }); Nut(graphics, 576, 520, delegate { OpenStyle(true); });
             if (catalog.Status.Length > 0) Label(graphics, catalog.Status, R(18, 480, 274, 56), accent, false, 11);
         }
         void Nut(Graphics graphics, float x, float y, Action action)
@@ -290,8 +304,8 @@ namespace BilibiliPotPlayer
         void SettingsPage(Graphics graphics)
         {
             bool dm = page == 2; CaptionOptions o = catalog.Options;
-            Link(graphics, L("‹ 返回", "‹ Back"), 20, 12, 82, delegate { page = 0; picker = 0; });
-            Label(graphics, dm ? L("弹幕设置", "Danmaku settings") : L("字幕设置", "Subtitle settings"), R(122, 12, 466, 30), Color.White, true, 16);
+            if (!editorMode) Link(graphics, L("‹ 返回", "‹ Back"), 20, 12, 82, delegate { page = 0; picker = 0; });
+            Label(graphics, dm ? L("弹幕设置", "Danmaku settings") : L("字幕设置", "Subtitle settings"), R(editorMode ? 24 : 122, 12, 466, 30), Color.White, true, 16);
             Line(graphics, 24, 54, 596, 54);
             Section(graphics, L("字体与外观", "Font & appearance"), 66);
             string font = dm ? o.DanmakuFont : o.SubtitleFont;
@@ -312,7 +326,7 @@ namespace BilibiliPotPlayer
                 Checkbox(graphics, L("启用彩色弹幕", "Enable colored danmaku"), 24, 388, 270, o.UseDanmakuColor, delegate { o.UseDanmakuColor = !o.UseDanmakuColor; Changed(); });
                 Checkbox(graphics, L("保留弹幕原色", "Keep original colors"), 316, 388, 280, !o.DanmakuUniformColor, delegate { o.DanmakuUniformColor = !o.DanmakuUniformColor; Changed(); });
                 Checkbox(graphics, L("速度同步播放倍数", "Sync speed with playback"), 24, 431, 560, o.DanmakuSpeedSync, delegate { o.DanmakuSpeedSync = !o.DanmakuSpeedSync; Changed(); });
-                Switch(graphics, 24, 476, o.DanmakuEnabled); Label(graphics, L("弹幕总开关（D）", "Danmaku toggle (D)"), R(67, 476, 510, 33), Color.White); Register(R(24, 474, 570, 37), ToggleDanmaku);
+                if (!editorMode) { Switch(graphics, 24, 476, o.DanmakuEnabled); Label(graphics, L("弹幕总开关", "Danmaku toggle"), R(67, 476, 510, 33), Color.White); Register(R(24, 474, 570, 37), ToggleDanmaku); }
             }
             else
             {
@@ -324,7 +338,7 @@ namespace BilibiliPotPlayer
             // Preview uses the same family, weight and colors as the actual renderer.
             RectangleF preview = R(24, 566, 572, 42);
             AssPreview(graphics,L("字幕和弹幕 · 文字预览", "Subtitles & danmaku · Preview"),preview,o,dm);
-            if (dm) Link(graphics, L("恢复默认设置", "Restore defaults"), 24, 618, 180, delegate { o.ResetDanmaku(); picker = 0; Changed(); });
+            if (dm) Link(graphics, L("恢复默认设置", "Restore defaults"), 24, 618, 180, delegate { o.ResetDanmaku(); picker = 0; Changed(); if (EditorReset != null) EditorReset(); });
             else Label(graphics, L("图像字幕沿用原生渲染", "Bitmap subtitles use native rendering"), R(24, 618, 570, 26), muted, false, 11);
         }
         LibassRenderer previewRenderer;
@@ -405,6 +419,16 @@ namespace BilibiliPotPlayer
         }
         protected override void OnMouseWheel(MouseEventArgs e)
         {
+            if (editorMode)
+            {
+                for (Control parent = Parent; parent != null; parent = parent.Parent)
+                {
+                    ScrollableControl scroll = parent as ScrollableControl;
+                    if (scroll == null || !scroll.AutoScroll) continue;
+                    scroll.AutoScrollPosition = new Point(-scroll.AutoScrollPosition.X, Math.Max(0, -scroll.AutoScrollPosition.Y - e.Delta / 120 * Math.Max(1, SystemInformation.MouseWheelScrollLines) * Font.Height)); break;
+                }
+                return;
+            }
             if (page != 0 || dragging) return;
             TextCategory? category = CaptionDropAreas.At(e.X / scale, e.Y / scale);
             if (!category.HasValue) return;
@@ -426,6 +450,6 @@ namespace BilibiliPotPlayer
         }
         protected override void OnPaint(PaintEventArgs e)
         { base.OnPaint(e); hits.Clear(); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; if (page == 0) MainPage(e.Graphics); else { SettingsPage(e.Graphics); Picker(e.Graphics); } using (Pen border = new Pen(Color.FromArgb(62, 63, 70))) e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1); if (page == 0) DraggedRow(e.Graphics); }
-        protected override void Dispose(bool disposing) { if (disposing) { tip.Dispose(); if(previewRenderer!=null) previewRenderer.Dispose(); } base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { if (editorMode && Parent != null) Parent.SizeChanged -= ResizeParent; tip.Dispose(); if(previewRenderer!=null) previewRenderer.Dispose(); } base.Dispose(disposing); }
     }
 }

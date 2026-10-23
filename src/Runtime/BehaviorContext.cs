@@ -13,11 +13,13 @@ namespace BilibiliPotPlayer
         readonly Stopwatch clock = Stopwatch.StartNew();
         readonly EventWaitHandle stop;
         readonly InputController input;
+        readonly ShortcutStore shortcuts = new ShortcutStore();
+        readonly Profile profile;
         long nextDiscovery;
         internal BehaviorContext(Profile profile, EventWaitHandle stop)
         {
-            this.stop = stop;
-            input = new InputController(profile, inputSessions);
+            this.stop = stop; this.profile = profile;
+            input = new InputController(profile, inputSessions, shortcuts);
             timer.Interval = 15; timer.Tick += Tick; timer.Start();
         }
         void Tick(object sender, EventArgs args)
@@ -35,7 +37,7 @@ namespace BilibiliPotPlayer
                 foreach (IntPtr window in windows)
                     if (!sessions.ContainsKey(window))
                     {
-                        PlayerControls session = new PlayerControls(window, input.SetBaseSpeed);
+                        PlayerControls session = new PlayerControls(window, input.SetBaseSpeed, shortcuts, profile);
                         sessions.Add(window, session); inputSessions.Add(window, session);
                     }
             }

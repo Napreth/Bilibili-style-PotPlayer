@@ -19,6 +19,11 @@ namespace BilibiliPotPlayer
         internal readonly WindowMode Mode;
         internal readonly WindowLayout Layout;
         internal readonly PlaybackChrome Chrome;
+        internal readonly PlayerMenus Menus;
+        public bool DialogForeground { get { return Menus.DialogForeground; } }
+        public void OpenSettings() { DismissMenus(); Menus.OpenSettings(0); }
+        public void ShowContextMenu(int x, int y) { DismissMenus(); Menus.Show(x, y); }
+        void DismissMenus() { Volume.Dismiss(); SpeedMenu.Dismiss(); Streams.DismissPopups(); SubtitleMenu.Dismiss(); }
         internal PlayerStage Stage { get { return Mode.Stage; } }
         IntPtr IChromeContext.Player { get { return Player; } }
         VolumePopup IChromeContext.Volume { get { return Volume; } }
@@ -45,12 +50,14 @@ namespace BilibiliPotPlayer
         public void CameraUp(int x, int y) { Camera.Up(new Native.Point { x = x, y = y }); }
         public void CancelCamera() { Camera.Cancel(); }
         public void UserPlaybackAction() { Camera.UserPlaybackAction(); }
-        internal PlayerControls(IntPtr player, Action<IntPtr, int> selectRate)
+        internal PlayerControls(IntPtr player, Action<IntPtr, int> selectRate, ShortcutStore shortcuts, Profile profile)
         {
             Player = player; Playlist = new PlaylistLayout(player); Layout = new WindowLayout(player);
             Mode = new WindowMode(player, Streams); SpeedMenu = new SpeedPopup(Speed, selectRate);
             Captions = new CaptionCatalog(player, Streams); SubtitleMenu = new SubtitlePopup(Subtitles, Captions);
             Overlay = new TimedOverlay(Captions); Chrome = new PlaybackChrome(this); Camera = new CameraControl(player, Streams);
+            Menus = new PlayerMenus(player, Captions, Streams, shortcuts, profile);
+            SubtitleMenu.OpenSettings = delegate(bool danmaku) { DismissMenus(); Menus.OpenSettings(danmaku ? 3 : 2); };
         }
         public IntPtr FocusedPlayer()
         {
@@ -70,7 +77,8 @@ namespace BilibiliPotPlayer
             Overlay.MenuWindow = Chrome.IsHandleCreated ? Chrome.Handle : IntPtr.Zero; Overlay.Update(Player, now);
             Chrome.UpdatePlayer(now);
             if (Chrome.IsHandleCreated) Layout.BindChrome(Chrome.Handle);
-            IntPtr interactive = focused == Player && Chrome.ControlsVisible ? Player : IntPtr.Zero;
+            Menus.Tick(now);
+            IntPtr interactive = focused == Player && Chrome.ControlsVisible && !Menus.MenuVisible ? Player : IntPtr.Zero;
             Native.Point pointer;
             if (interactive != IntPtr.Zero && Native.GetCursorPos(out pointer))
             {
@@ -85,6 +93,6 @@ namespace BilibiliPotPlayer
             Camera.Tick(now, focused == Player);
         }
         public void Dispose()
-        { Chrome.Dispose(); Camera.Dispose(); Overlay.Dispose(); Captions.Dispose(); Volume.Dispose(); SpeedMenu.Dispose(); Speed.Dispose(); Streams.Dispose(); SubtitleMenu.Dispose(); Subtitles.Dispose(); Layout.Dispose(); }
+        { Menus.Dispose(); Chrome.Dispose(); Camera.Dispose(); Overlay.Dispose(); Captions.Dispose(); Volume.Dispose(); SpeedMenu.Dispose(); Speed.Dispose(); Streams.Dispose(); SubtitleMenu.Dispose(); Subtitles.Dispose(); Layout.Dispose(); }
     }
 }

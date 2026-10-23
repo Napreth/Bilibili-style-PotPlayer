@@ -115,6 +115,8 @@ namespace BilibiliPotPlayer
     internal sealed class MediaCatalog
     {
         internal bool Spherical;
+        internal string Container = "";
+        internal long FileSize, DurationMilliseconds, OverallBitrate;
         internal readonly List<MediaTrack> Audio = new List<MediaTrack>(), Video = new List<MediaTrack>();
         internal readonly List<ContainerCaption> Text = new List<ContainerCaption>();
         internal static MediaCatalog Read(string path)
@@ -129,6 +131,10 @@ namespace BilibiliPotPlayer
                 MediaInfo_Option(handle, "Internet", "No");
                 MediaInfo_Option(handle, "ParseSpeed", "0.5");
                 if (MediaInfo_Open(handle, path) == IntPtr.Zero) return catalog;
+                catalog.Container = Marshal.PtrToStringUni(MediaInfo_Get(handle, IntPtr.Zero, IntPtr.Zero, "Format", (IntPtr)1, IntPtr.Zero)) ?? "";
+                catalog.FileSize = Number(Marshal.PtrToStringUni(MediaInfo_Get(handle, IntPtr.Zero, IntPtr.Zero, "FileSize", (IntPtr)1, IntPtr.Zero)) ?? "");
+                catalog.DurationMilliseconds = Number(Marshal.PtrToStringUni(MediaInfo_Get(handle, IntPtr.Zero, IntPtr.Zero, "Duration", (IntPtr)1, IntPtr.Zero)) ?? "");
+                catalog.OverallBitrate = Number(Marshal.PtrToStringUni(MediaInfo_Get(handle, IntPtr.Zero, IntPtr.Zero, "OverallBitRate", (IntPtr)1, IntPtr.Zero)) ?? "");
                 HashSet<long> rpuTracks = null;
                 for (int kind = 1; kind <= 2; kind++)
                 {

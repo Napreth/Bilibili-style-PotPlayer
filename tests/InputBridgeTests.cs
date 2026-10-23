@@ -167,7 +167,7 @@ internal static class BridgeTests
         Equal(true, SphericalVideoProbe.Candidate("cube.mp4", 3000, 2000, true), "tagged cubemap does not require a 2:1 canvas");
         Equal(false, SphericalVideoProbe.Read(new System.IO.MemoryStream(new byte[7])), "truncated spherical metadata is rejected");
         for (int key = 0x70; key <= 0x7B; key++)
-            Equal(key == 0x74 ? KeyRoute.Blocked : KeyRoute.Native, InputPolicy.Route(key, false, false, false, false), "function key " + key);
+            Equal(key == 0x74 ? KeyRoute.Mapped : KeyRoute.Native, InputPolicy.Route(key, false, false, false, false), "function key " + key);
         Equal(KeyRoute.Native, InputPolicy.Route(0x75, true, true, false, false), "modified F6 retains native behavior");
         Equal(KeyRoute.Native, InputPolicy.Route(0x5B, false, false, false, false), "left Windows key reaches the system before its state changes");
         Equal(KeyRoute.Native, InputPolicy.Route(0x5C, false, false, false, false), "right Windows key reaches the system before its state changes");
@@ -222,6 +222,7 @@ internal static class BridgeTests
         TimedTextChecks.Run(Equal<bool>);
         CaptionClassificationChecks.Run(Equal<bool>);
         ModuleChecks.Run(Equal<bool>);
+        ShortcutChecks.Run(Equal<bool>);
         NativeTimedTextChecks.Run(Equal<bool>);
         AssRenderingChecks.Run(Equal<bool>);
         DanmakuFactoryChecks.Run(Equal<bool>);

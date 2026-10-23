@@ -16,7 +16,7 @@
 
 ## 卸载
 
-关闭 PotPlayer，在 Windows“已安装的应用”中卸载 Bilibili Behaviors for PotPlayer。卸载先恢复原设置、快捷键和皮肤，再删除清单中记录的本项目文件；已有同名资源会恢复。用户的 `caption-options.json` 和原始备份保留。重新安装时重新捕获当前设置，并归档旧备份。
+关闭 PotPlayer，在 Windows“已安装的应用”中卸载 Bilibili Behaviors for PotPlayer。卸载先恢复原设置、快捷键和皮肤，再删除清单中记录的本项目文件；已有同名资源会恢复。用户的 `caption-options.json`、`shortcut-options.json` 和原始备份保留。重新安装时重新捕获当前设置，并归档旧备份。
 
 卸载不递归删除 PotPlayer 目录。路径必须位于安装根目录内，不能穿过目录链接。备份或安装清单缺失时保留文件，避免失去恢复依据。
 

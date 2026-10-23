@@ -19,6 +19,9 @@ namespace BilibiliPotPlayer
         readonly RewindGesture left;
         readonly Queue<Action> queue = new Queue<Action>();
         readonly HashSet<int> pressed = new HashSet<int>();
+        readonly Dictionary<int, PlayerAction> heldActions = new Dictionary<int, PlayerAction>();
+        readonly ShortcutStore shortcuts;
+        int shortcutRevision;
         readonly Stopwatch clock = Stopwatch.StartNew();
         readonly Native.HookProc keyboardProc, mouseProc;
         readonly IDictionary<IntPtr, IInputSession> controls;
@@ -30,11 +33,12 @@ namespace BilibiliPotPlayer
         bool speedMouseDown;
         readonly VideoClickGesture videoClick = new VideoClickGesture(SystemInformation.DoubleClickTime, 6);
         IntPtr videoClickPlayer, leftMouseDown;
-        IntPtr middleMouseDown;
+        IntPtr middleMouseDown, rightMouseDown;
 
-        internal InputController(Profile profile, IDictionary<IntPtr, IInputSession> controls)
+        internal InputController(Profile profile, IDictionary<IntPtr, IInputSession> controls, ShortcutStore shortcuts)
         {
             this.profile = profile; this.controls = controls;
+            this.shortcuts = shortcuts;
             right = new RightGesture(profile.HoldMilliseconds);
             left = new RewindGesture(profile.HoldMilliseconds, profile.RewindIntervalMilliseconds);
             keyboardProc = Keyboard; mouseProc = Mouse;
@@ -56,41 +60,47 @@ namespace BilibiliPotPlayer
             long eventTime = clock.ElapsedMilliseconds;
             if (up && pressed.Remove(key))
             {
-                if (key == 0x27) queue.Enqueue(delegate
+                PlayerAction held; heldActions.TryGetValue(key, out held); heldActions.Remove(key);
+                if (held == PlayerAction.SeekForward) queue.Enqueue(delegate
                 {
                     if (hwnd == gesturePlayer) DoRight(right.Up(eventTime));
                     else CancelGestures();
                 });
-                if (key == 0x25) queue.Enqueue(delegate { left.Cancel(); });
+                if (held == PlayerAction.SeekBack) queue.Enqueue(delegate { left.Cancel(); });
                 return (IntPtr)1;
             }
             if (hwnd == IntPtr.Zero || !down) return Native.CallNextHookEx(keyboardHook, code, message, data);
             bool shift = Native.Pressed(0x10), ctrl = Native.Pressed(0x11), alt = Native.Pressed(0x12);
-            KeyRoute route = InputPolicy.Route(key, shift, ctrl, alt, Native.Pressed(0x5B) || Native.Pressed(0x5C));
+            KeyRoute route = InputPolicy.Route(key, shift, ctrl, alt, Native.Pressed(0x5B) || Native.Pressed(0x5C), shortcuts.Current);
             if (route == KeyRoute.Native)
                 return Native.CallNextHookEx(keyboardHook, code, message, data);
             if (route == KeyRoute.Blocked) { pressed.Add(key); return (IntPtr)1; }
             bool first = pressed.Add(key);
-            if (!first && key != 0x26 && key != 0x28) return (IntPtr)1;
+            PlayerAction action = shortcuts.Current.Find(key, (shift ? 1 : 0) | (ctrl ? 2 : 0) | (alt ? 4 : 0));
+            if (first) heldActions[key] = action;
+            if (!first && action != PlayerAction.VolumeUp && action != PlayerAction.VolumeDown) return (IntPtr)1;
             queue.Enqueue(delegate
             {
+                if (FocusedPlayer() != hwnd) return;
                 if (gesturePlayer != IntPtr.Zero && gesturePlayer != hwnd) CancelGestures();
-                if (key == 0x27) { gesturePlayer = hwnd; right.Down(eventTime); }
-                else if (key == 0x25) { gesturePlayer = hwnd; if (left.Down(eventTime)) Native.Seek(hwnd, -profile.SeekSeconds); }
-                else if (key == 0x26) Native.Volume(hwnd, profile.VolumeStepPercent);
-                else if (key == 0x28) Native.Volume(hwnd, -profile.VolumeStepPercent);
-                else if (key == 0x20) TogglePlayback(hwnd);
-                else if (key == 0xBC || key == 0xDB) Native.Set(hwnd, Native.SetPlayOrder, 0);
-                else if (key == 0xBE || key == 0xDD) Native.Set(hwnd, Native.SetPlayOrder, 1);
-                else if (key == 0x46) Native.Fullscreen(hwnd);
-                else if (key == 0x1B) { if (Native.IsFullscreen(hwnd)) Native.Fullscreen(hwnd); }
-                else if (key == 0x4D) Native.ToggleMute(hwnd);
-                else if (key == 0x58) { IInputSession owner; if (controls.TryGetValue(hwnd, out owner)) owner.ToggleSidebar(); }
-                else if (key == 0x43) { IInputSession subtitleOwner; if (controls.TryGetValue(hwnd, out subtitleOwner)) subtitleOwner.ToggleSubtitles(); }
-                else if (key == 0x53) { IInputSession modeOwner; if (controls.TryGetValue(hwnd, out modeOwner)) modeOwner.ToggleMode(); }
-                else if (key == 0x44) { IInputSession captionOwner; if (controls.TryGetValue(hwnd, out captionOwner)) captionOwner.ToggleDanmaku(); }
-                else if (shift && key == 0x31) SetBaseSpeed(hwnd, 1000);
-                else if (shift && key == 0x32) SetBaseSpeed(hwnd, 2000);
+                IInputSession owner; controls.TryGetValue(hwnd, out owner);
+                if (action == PlayerAction.SeekForward) { gesturePlayer = hwnd; right.Down(eventTime); }
+                else if (action == PlayerAction.SeekBack) { gesturePlayer = hwnd; if (left.Down(eventTime)) Native.Seek(hwnd, -profile.SeekSeconds); }
+                else if (action == PlayerAction.VolumeUp) Native.Volume(hwnd, profile.VolumeStepPercent);
+                else if (action == PlayerAction.VolumeDown) Native.Volume(hwnd, -profile.VolumeStepPercent);
+                else if (action == PlayerAction.PlayPause) TogglePlayback(hwnd);
+                else if (action == PlayerAction.Previous) Native.Set(hwnd, Native.SetPlayOrder, 0);
+                else if (action == PlayerAction.Next) Native.Set(hwnd, Native.SetPlayOrder, 1);
+                else if (action == PlayerAction.Fullscreen) Native.Fullscreen(hwnd);
+                else if (action == PlayerAction.ExitFullscreen) { if (Native.IsFullscreen(hwnd)) Native.Fullscreen(hwnd); }
+                else if (action == PlayerAction.Mute) Native.ToggleMute(hwnd);
+                else if (action == PlayerAction.Sidebar && owner != null) owner.ToggleSidebar();
+                else if (action == PlayerAction.Subtitles && owner != null) owner.ToggleSubtitles();
+                else if (action == PlayerAction.SmallWindow && owner != null) owner.ToggleMode();
+                else if (action == PlayerAction.Danmaku && owner != null) owner.ToggleDanmaku();
+                else if (action == PlayerAction.NormalSpeed) SetBaseSpeed(hwnd, 1000);
+                else if (action == PlayerAction.DoubleSpeed) SetBaseSpeed(hwnd, 2000);
+                else if (action == PlayerAction.Settings && owner != null) owner.OpenSettings();
                 // Enter intentionally has no action.
             });
             return (IntPtr)1;
@@ -102,6 +112,17 @@ namespace BilibiliPotPlayer
             Native.Mouse input = (Native.Mouse)Marshal.PtrToStructure(data, typeof(Native.Mouse));
             if (input.extra.ToUInt64() == Native.VirtualMouseTag) return Native.CallNextHookEx(mouseHook, code, message, data);
             IntPtr hwnd = FocusedPlayer();
+            if (hwnd == IntPtr.Zero)
+                foreach (KeyValuePair<IntPtr, IInputSession> entry in controls)
+                    if (entry.Value.DialogForeground && Native.IsPlayerSurface(entry.Key, input.point))
+                    { hwnd = entry.Key; if (msg == 0x201 || msg == 0x204 || msg == 0x207) Native.SetForegroundWindow(hwnd); break; }
+            if (msg == 0x205 && rightMouseDown != IntPtr.Zero)
+            {
+                IntPtr clicked = rightMouseDown; rightMouseDown = IntPtr.Zero; IInputSession menuOwner;
+                if (hwnd == clicked && Native.IsPlayerSurface(clicked, input.point) && controls.TryGetValue(clicked, out menuOwner))
+                    queue.Enqueue(delegate { CancelGestures(); videoClick.Cancel(); menuOwner.ShowContextMenu(input.point.x, input.point.y); });
+                return (IntPtr)1;
+            }
             if (middleMouseDown != IntPtr.Zero && (msg == 0x200 || msg == 0x208))
             {
                 IntPtr middlePlayer = middleMouseDown; IInputSession cameraOwner;
@@ -137,6 +158,9 @@ namespace BilibiliPotPlayer
             Native.Rect r; Native.GetWindowRect(hwnd, out r);
             if (!overPopup && (input.point.x < r.left || input.point.x >= r.right || input.point.y < r.top || input.point.y >= r.bottom))
                 return Native.CallNextHookEx(mouseHook, code, message, data);
+            if (msg == 0x204 && !overPopup && owner != null)
+            { rightMouseDown = hwnd; return (IntPtr)1; }
+            if (overPopup && msg >= 0x204 && msg <= 0x206) return Native.CallNextHookEx(mouseHook, code, message, data);
             if (msg == 0x207 && !overPopup && Native.IsVideoSurface(hwnd, input.point) && owner != null)
             {
                 middleMouseDown = hwnd; long now = clock.ElapsedMilliseconds;
@@ -201,10 +225,11 @@ namespace BilibiliPotPlayer
         }
         void CancelGestures()
         {
-            DoRight(right.Cancel()); left.Cancel(); pressed.Clear(); wheelRemainder = 0; gesturePlayer = IntPtr.Zero;
+            DoRight(right.Cancel()); left.Cancel(); pressed.Clear(); heldActions.Clear(); wheelRemainder = 0; gesturePlayer = IntPtr.Zero;
         }
         internal void Tick()
         {
+            if (shortcutRevision != shortcuts.Revision) { queue.Clear(); CancelGestures(); videoClick.Cancel(); shortcutRevision = shortcuts.Revision; }
             while (queue.Count > 0) queue.Dequeue()();
             IntPtr player = FocusedPlayer();
             long now = clock.ElapsedMilliseconds;

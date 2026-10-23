@@ -8,7 +8,7 @@ foreach ($entry in $checksums) {
     if (-not $file.StartsWith($package + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Package path escaped its root.' }
     if ((Get-FileHash -LiteralPath $file).Hash -ne $entry.SHA256) { throw "Package checksum mismatch: $($entry.Path)" }
 }
-$modules = @('Contracts','Runtime','Platform','Input','Media','Windowing','Playback','Captions')
+$modules = @('Contracts','Runtime','Platform','Input','Media','Windowing','Playback','Captions','Settings')
 foreach ($module in $modules) {
     if (-not (Test-Path -LiteralPath (Join-Path $runtime "BilibiliBehaviors.$module.dll"))) { throw "Missing module: $module" }
 }
@@ -39,4 +39,4 @@ foreach ($legacyNotice in @('MediaInfo.License.html','THIRD_PARTY_NOTICES.md','t
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $package 'BilibiliLite.dsf'))
 try { if ($zip.Entries.Count -ne 47) { throw 'Skin package lost required default-skin resources.' } } finally { $zip.Dispose() }
-Write-Output "PASS: $($checksums.Count) payload checksums, eight modules, third-party sources/notices, and complete skin."
+Write-Output "PASS: $($checksums.Count) payload checksums, nine modules, third-party sources/notices, and complete skin."

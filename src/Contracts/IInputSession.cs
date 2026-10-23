@@ -4,6 +4,9 @@ namespace BilibiliPotPlayer
     internal interface IInputSession
     {
         IntPtr FocusedPlayer();
+        bool DialogForeground { get; }
+        void OpenSettings();
+        void ShowContextMenu(int x, int y);
         bool IsOver(int x, int y);
         bool IsOverCaptionMenu(int x, int y);
         void ToggleSidebar();

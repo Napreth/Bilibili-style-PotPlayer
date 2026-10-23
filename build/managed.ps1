@@ -14,7 +14,8 @@ $modules = [ordered]@{
     Media = @('Contracts','Platform')
     Captions = @('Contracts','Platform')
     Playback = @('Contracts','Platform','Media')
-    Runtime = @('Contracts','Platform','Input','Windowing','Media','Captions','Playback')
+    Settings = @('Contracts','Platform','Media','Captions')
+    Runtime = @('Contracts','Platform','Input','Windowing','Media','Captions','Playback','Settings')
 }
 $version = (Get-Content (Join-Path $PSScriptRoot 'version.txt') -Raw).Trim()
 foreach ($module in $modules.Keys) {

@@ -8,7 +8,7 @@ internal static class ModuleChecks
     {
         ModuleCatalog.Validate();
         HashSet<string> names = new HashSet<string>(ModuleCatalog.Names);
-        equal(true, names.Count == 7, "host validates seven feature/foundation DLLs plus runtime");
+        equal(true, names.Count == 8, "host validates eight feature/foundation DLLs plus runtime");
         foreach (string name in names)
         {
             Assembly assembly = Assembly.Load("BilibiliBehaviors." + name);
