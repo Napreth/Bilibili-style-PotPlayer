@@ -8,8 +8,8 @@
 AppId={{A558587E-08C1-43EA-B655-CC5228BB134B}
 AppName=Bilibili Behaviors for PotPlayer
 AppVersion={#AppVersion}
-AppPublisher=Bilibili-style PotPlayer contributors
-AppPublisherURL=https://github.com/Napreth/Bilibili-style-PotPlayer
+AppPublisher=BilibiliUI for PotPlayer contributors
+AppPublisherURL=https://github.com/Napreth/BilibiliUI-for-PotPlayer
 DefaultDirName={code:DefaultPlayerDirectory}
 DirExistsWarning=no
 DisableProgramGroupPage=yes
