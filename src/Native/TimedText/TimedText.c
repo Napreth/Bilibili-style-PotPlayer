@@ -42,6 +42,23 @@ static int extract_caption(const wchar_t *path, int ordinal,
     av_dict_set(&options, "probesize", "4194304", 0);
     if ((result = avformat_open_input(&format, utf8, NULL, &options)) < 0) goto done;
     if ((result = avformat_find_stream_info(format, NULL)) < 0) goto done;
+    if (raw) {
+        int fonts = 0, font_bytes = 0;
+        for (unsigned i = 0; i < format->nb_streams; i++) {
+            AVCodecParameters *par = format->streams[i]->codecpar;
+            AVDictionaryEntry *filename = av_dict_get(format->streams[i]->metadata,"filename",NULL,0);
+            if (par->codec_type != AVMEDIA_TYPE_ATTACHMENT || !filename || !par->extradata || par->extradata_size <= 0) continue;
+            const char *ext = strrchr(filename->value,'.');
+            if (!ext || (_stricmp(ext,".ttf") && _stricmp(ext,".otf") && _stricmp(ext,".ttc"))) continue;
+            int name_size = (int)strlen(filename->value)+1;
+            if (++fonts > 64 || name_size > 1024 || par->extradata_size > 16*1024*1024 || (font_bytes += par->extradata_size) > 32*1024*1024) { result=AVERROR(ENOSPC); goto done; }
+            char *font = av_malloc(name_size+par->extradata_size);
+            if (!font) { result=AVERROR(ENOMEM); goto done; }
+            memcpy(font,filename->value,name_size); memcpy(font+name_size,par->extradata,par->extradata_size);
+            int stop=raw(0,0,font,name_size+par->extradata_size,16); av_free(font);
+            if (stop) { result=AVERROR(ENOSPC); goto done; }
+        }
+    }
     for (unsigned i = 0; i < format->nb_streams; i++)
         if (format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE && count++ == ordinal)
         { selected = i; stream = format->streams[i]; break; }
@@ -88,7 +105,9 @@ static int extract_caption(const wchar_t *path, int ordinal,
                         /* FFmpeg ASS rectangles contain ReadOrder,Layer,Style,...,Text.
                            Retain all fields after ReadOrder; managed code adds times. */
                         const char *body = ass ? strchr(ass, ',') : NULL;
-                        if (body && raw(start,end,body+1,(int)strlen(body+1),2 | (inferred ? 4 : 0))) {
+                        long order=ass ? strtol(ass,NULL,10) : -1;
+                        int order_bits=order>=0 && order<=100000 ? ((int)order+1)<<8 : 0;
+                        if (body && raw(start,end,body+1,(int)strlen(body+1),2 | (inferred ? 4 : 0) | order_bits)) {
                             avsubtitle_free(&subtitle); result = AVERROR(ENOSPC); goto done;
                         }
                     }

@@ -22,3 +22,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Matroska fixture generation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'MP4 fixture generation failed.' }
 & $FFmpeg -nostdin -hide_banner -loglevel error -y -i "$repo/tests/fixtures/classification.ass" -map 0:s -c:s copy "$repo/tests/fixtures/classification.mkv"
 if ($LASTEXITCODE -ne 0) { throw 'Mixed ASS classification fixture generation failed.' }
+& $FFmpeg -nostdin -hide_banner -loglevel error -y -i "$repo/tests/fixtures/classification.mkv" -map 0:s -c:s copy -attach "$repo/tests/fixtures/ass-fixture.ttf" -metadata:s:t mimetype=application/x-truetype-font "$repo/tests/fixtures/ass-font.mkv"
+if ($LASTEXITCODE -ne 0) { throw 'ASS font attachment fixture generation failed.' }

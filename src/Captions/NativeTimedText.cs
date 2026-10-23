@@ -27,16 +27,23 @@ namespace BilibiliPotPlayer
             if (ordinal < 0) throw new ArgumentOutOfRangeException("ordinal");
             path = Path.GetFullPath(path); if (!File.Exists(path)) throw new FileNotFoundException("媒体文件不存在",path);
             StringBuilder header = new StringBuilder(), events = new StringBuilder(); int count = 0, total = 0;
-            List<bool> inferred = new List<bool>(); Exception callbackError = null; bool originalAss = false;
+            List<bool> inferred = new List<bool>(); List<int> orders = new List<int>(); List<AssFont> fonts = new List<AssFont>(); Exception callbackError = null; bool originalAss = false;
             RawCallback callback = delegate(long start, long end, IntPtr text, int bytes, int flags) {
                 try {
                     if (bytes < 0 || bytes > TimedText.MaxBytes || (total += bytes) > TimedText.MaxBytes || (flags & 2) != 0 && ++count > TimedText.MaxCues) throw new InvalidDataException("字幕内容超过大小限制");
-                    byte[] buffer = new byte[bytes]; Marshal.Copy(text,buffer,0,bytes); string value = Encoding.UTF8.GetString(buffer).TrimEnd('\0');
+                    byte[] buffer = new byte[bytes]; Marshal.Copy(text,buffer,0,bytes);
+                    if ((flags & 16) != 0) {
+                        int zero=Array.IndexOf(buffer,(byte)0); if(zero<1 || zero>1024) throw new InvalidDataException("字体附件名称无效");
+                        byte[] data=new byte[bytes-zero-1]; Buffer.BlockCopy(buffer,zero+1,data,0,data.Length);
+                        fonts.Add(new AssFont(Encoding.UTF8.GetString(buffer,0,zero),data)); return 0;
+                    }
+                    string value = Encoding.UTF8.GetString(buffer).TrimEnd('\0');
                     if ((flags & 1) != 0) { header.Append(value); originalAss = (flags & 8) != 0; }
                     else {
                         int comma = value.IndexOf(','); if (comma < 0) throw new InvalidDataException("ASS 事件字段缺失");
                         events.Append("Dialogue: ").Append(value.Substring(0,comma)).Append(',').Append(AssTime(start)).Append(',').Append(AssTime(end)).Append(',').Append(value.Substring(comma+1)).Append('\n');
                         inferred.Add((flags & 4) != 0);
+                        orders.Add((flags>>8)-1);
                     }
                     return 0;
                 } catch (Exception error) { callbackError = error; return 1; }
@@ -49,8 +56,11 @@ namespace BilibiliPotPlayer
             // durations as measurements supplied by the container.
             TextSource source = new TextSource { Title = title, Format = "容器文本 / ASS", Loaded = true };
             AssEvents.Parse(header.ToString()+"\n"+events,source);
+            source.Fonts.AddRange(fonts);
+            if (!originalAss) source.AssHeader = "";
             for (int i = 0; i < source.Events.Count && i < inferred.Count; i++) {
                 source.Events[i].DurationInferred = inferred[i]; source.Events[i].Origin = "Container / "+(originalAss ? "ASS" : "Text");
+                if(orders[i]>=0) source.Events[i].AssOrder=orders[i];
                 if (!originalAss) { source.Events[i].PositionKnown = false; source.Events[i].Motion = CueMotion.Unknown; }
             }
             return CaptionClassifier.Split(source);

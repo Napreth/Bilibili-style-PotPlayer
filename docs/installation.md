@@ -10,7 +10,7 @@
 
 原生自定义快捷键会暂时清空。操作映射见项目 README。启动扩展在 `Extension/Media/PlayParse/MediaPlayParse - BilibiliBehaviors.as`，宿主和 DLL 在 `Extension/BilibiliBehaviors/`。没有托盘、自启、服务或计划任务。
 
-第三方许可证和声明统一安装到 `Extension/BilibiliBehaviors/LICENSES/`。FFmpeg 原始源码、配置和构建脚本在相邻的 `third-party/`。若播放器目录允许当前账户写入，可使用安装参数 `/CURRENTUSER`，将卸载入口登记到当前账户。
+第三方许可证和声明统一安装到 `Extension/BilibiliBehaviors/LICENSES/`。FFmpeg、libass 及字体依赖的原始源码、配置和构建脚本在相邻的 `third-party/`。若播放器目录允许当前账户写入，可使用安装参数 `/CURRENTUSER`，将卸载入口登记到当前账户。
 
 从旧版 BilibiliInput 迁移时，先用旧版恢复脚本恢复，或使用安装参数 `/LEGACYBACKUP="原 original-input.json 完整路径"`。迁移导入原始备份并移除旧启动扩展。
 
@@ -26,9 +26,11 @@
 .\build\package.ps1
 ```
 
-需要系统 Framework64 C# 编译器、x64 MinGW-w64 GCC、GNU Make、Bash 和 PowerShell。依赖来源及 SHA-256 在 `build/dependencies.lock.json`。首次构建下载固定 FFmpeg 官方源码；Inno Setup 编译器以便携模式准备在 `.local/tools`。
+需要系统 Framework64 C# 编译器、x64 MinGW-w64 GCC、GNU Make、Bash、Python（含 pip）和 PowerShell。依赖来源及 SHA-256 在 `build/dependencies.lock.json`。首次构建下载固定 FFmpeg、libass 及字体依赖源码；Meson、Ninja 与 Inno Setup 编译器准备在 `.local/tools`，不修改全局 Python 环境。
 
 FFmpeg 动态库读取容器内文本字幕，无需安装 ffmpeg.exe。构建禁用 GPL、nonfree、version3、外部库和网络；保留容器读取、文本字幕解码及 SubRip 编码。原始源码、许可和配置随安装包提供。
+
+`build/libass.ps1` 构建 libass 共享库，固定选项在 `build/libass-options.json`。使用系统 DirectWrite 选字，FreeType、HarfBuzz 和 FriBidi 静态链接进 libass；无需安装字体引擎或调整 PATH。FreeType 采用 FTL 许可。可以用 ABI 兼容的共享库替换随包 DLL；源码与重建配置随包提供。
 
 `build/out/runtime` 是开发运行目录，`build/out/package` 是安装载荷，`build/out/dist` 保存安装 EXE。构建产物不提交；仓库保留原生 DLL、第三方库与皮肤包。
 
@@ -41,7 +43,7 @@ FFmpeg 动态库读取容器内文本字幕，无需安装 ffmpeg.exe。构建�
 .\scripts\test-installation.ps1
 ```
 
-检查包括输入、布局、元数据、字幕解析、模块依赖，以及实际 DLL 提取 MKV SRT／ASS 和 MP4 mov_text。安装检查使用临时播放器目录及隔离注册表，验证首次备份、升级、卸载、二进制快捷键、资源恢复和重新安装。
+检查包括输入、布局、元数据、字幕解析、模块依赖、实际 DLL 提取 MKV SRT／ASS 和 MP4 mov_text，以及 libass 的字体附件、运动、变换、透明度、裁剪、卡拉 OK 和开关清屏像素检查。安装检查使用临时播放器目录及隔离注册表，验证首次备份、升级、卸载、二进制快捷键、资源恢复和重新安装。
 
 真实窗口检查使用 `build/out/runtime/BilibiliBehaviors.Tests.exe --window-check`、`--aspect-check`、`--chrome-check` 等。它们会操作测试播放器，应在专用测试环境使用。`--status` 与 `--ui-status` 只读。
 

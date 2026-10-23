@@ -104,8 +104,10 @@ namespace BilibiliPotPlayer
         }
         static TextSource Track(TextSource original, List<TextCue> events, TextCategory? forced)
         {
-            TextSource source = new TextSource { Title = original.Title, Format = original.Format, Error = original.Error, Loaded = true };
+            TextSource source = new TextSource { Title = original.Title, Format = original.Format, Error = original.Error, Loaded = true, AssHeader = original.AssHeader };
+            source.Fonts.AddRange(original.Fonts);
             source.Events.AddRange(events); source.Analysis = Analyze(events);
+            source.ProtocolAdvanced=events.Exists(c=>(c.Effects & CueEffects.Protocol)!=0);
             source.Category = forced ?? Decide(events, source.Analysis); source.AutoCategory = source.Category;
             source.IntrinsicAdvanced = source.Category == TextCategory.Advanced;
             if (!source.IntrinsicAdvanced) source.Cues.AddRange(events);
@@ -113,7 +115,7 @@ namespace BilibiliPotPlayer
             if (forced.HasValue) source.Analysis.Reason = forced == TextCategory.Advanced ? "高级协议、有效动画或特殊绘图" : forced == TextCategory.Uncertain ? "关键表现信息无法可靠解析" : "稳定的混合事件子集合";
             if (forced == TextCategory.Advanced) source.Analysis.Confidence = 1;
             if (source.Category == TextCategory.Uncertain) source.Analysis.Confidence = 0;
-            source.Detail = events.Count + (source.IntrinsicAdvanced ? " 条 · 暂不播放" : source.Category == TextCategory.Uncertain ? " 条 · 用途待确认" : source.Category == TextCategory.Subtitle ? " 条字幕" : " 条普通弹幕");
+            source.Detail = events.Count + (source.IntrinsicAdvanced ? source.AssRenderable ? " 条 ASS 特效" : " 条 · 暂不播放" : source.Category == TextCategory.Uncertain ? " 条 · 用途待确认" : source.Category == TextCategory.Subtitle ? " 条字幕" : " 条普通弹幕");
             return source;
         }
     }

@@ -20,8 +20,8 @@
 ## 环境要求
 
 - Windows 10/11 x64 与 64 位 PotPlayer，使用系统 .NET Framework。
-- 安装包包含 MediaInfo 和 LGPL 版 FFmpeg 动态库，无需另装 FFmpeg 或修改 PATH。
-- 开发构建需要 x64 MinGW-w64 GCC、GNU Make、Bash 和 PowerShell；C# 使用系统 Framework64 编译器。
+- 安装包包含 MediaInfo、LGPL 版 FFmpeg 及 libass 动态库，无需另装渲染依赖或修改 PATH。
+- 开发构建需要 x64 MinGW-w64 GCC、GNU Make、Bash、Python 和 PowerShell；C# 使用系统 Framework64 编译器。
 
 ## 安装
 
@@ -66,12 +66,13 @@ F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂�
 
 普通弹幕支持滚动、反向滚动、顶部及底部固定。主菜单提供显示区域、不透明度和速度，字号移入螺母设置页。默认保留弹幕原色，也可指定统一文字颜色；关闭“启用彩色弹幕”会强制渲染为白色，与按原始颜色过滤弹幕相互独立。
 
+字幕、普通弹幕和标准 ASS／SSA 特效统一由 libass 渲染。ASS 保留源画布、样式、Layer、运动、旋转、缩放、淡入淡出、卡拉 OK、裁剪和矢量绘图，并读取容器字体附件。高级列表中可单独开关 ASS 特效，“高级”过滤按钮控制这类效果。原生 ASS 遵循作者的样式和时间；字体、字号、速度和区域等通用设置用于普通文本及生成的弹幕。渲染链路见 [渲染说明](docs/rendering.md)。
+
 设置保存在 `%LOCALAPPDATA%\BilibiliPotPlayer\caption-options.json`，包含显示样式和手动分类，不改写源字幕或弹幕文件。
 
 ## pre-alpha 限制
 
-- 高级、代码和 BAS 弹幕仅识别、分类与计数，暂不播放或执行。
-- ASS 文本使用统一样式，不复现原有动画、绘图及复杂排版。
+- B 站 Mode 7、8、9（高级、代码、BAS）仅识别、分类与计数，暂不播放或执行；它们不属于 ASS 特效支持范围。
 - PGS、VobSub 等图像字幕沿用 PotPlayer 原生渲染，面板会列出，但暂不支持在此切换。
 - 翻译、语音生成字幕、自定义右键菜单和 F5 设置页尚未实现；智能识别人像的防挡弹幕尚未实现。
 - Hi-Res、HDR、空间音频标记基于源文件信息，不表示当前设备或渲染链路已经完整输出对应效果。
@@ -99,7 +100,7 @@ F5 保留给后续自定义设置页，Enter 当前无动作。右键菜单暂�
 .\scripts\dev.ps1 status
 ```
 
-`build/` 保存构建、依赖下载、安装与卸载逻辑，`scripts/` 保存开发诊断和样本生成。GitHub Actions 在 Windows 上从源码构建 LGPL FFmpeg，运行逻辑、原生提取及安装恢复检查，生成安装包工件，不自动发布 Release。
+`build/` 保存构建、依赖下载、安装与卸载逻辑，`scripts/` 保存开发诊断和样本生成。GitHub Actions 在 Windows 上从源码构建 LGPL FFmpeg 和 libass，运行逻辑、原生提取、实际像素渲染及安装恢复检查，生成安装包工件，不自动发布 Release。
 
 ## 目录
 
@@ -113,11 +114,11 @@ src/Windowing/       侧栏、全屏、小窗和原生布局桥接
 src/Playback/        控制栏、进度、倍速和音量
 src/Media/           媒体规格、轨道和选轨
 src/Captions/        字幕、弹幕和设置界面
-src/Native/          PlayerLayout 与 FFmpeg 文本适配器
+src/Native/          PlayerLayout、FFmpeg 文本适配器与 libass 渲染适配器
 skin/base/           固定的默认皮肤底包和校验值
 skin/overrides/      8 个修改定义和 1 个新增图标
 config/             输入配置
-third_party/        MediaInfo、LGPL FFmpeg 及构建配置
+third_party/        MediaInfo、LGPL FFmpeg、libass 及构建配置
 LICENSES/           第三方许可证与声明
 scripts/            开发工具
 build/              构建、安装与卸载；out/ 不进入 Git
@@ -135,4 +136,4 @@ tests/              逻辑、原生提取、窗口和安装检查
 - [弹幕过滤图标来源](src/Platform/assets/BilibiliFilterSources.md)
 - [测试样本说明](tests/fixtures/README.md)
 
-第三方许可证与声明统一放在 [LICENSES/](LICENSES/README.md)。FFmpeg 动态库使用 LGPL 构建；安装包包含对应原始源码压缩包、配置及构建脚本。
+第三方许可证与声明统一放在 [LICENSES/](LICENSES/README.md)。FFmpeg 动态库使用 LGPL 构建；libass 使用 ISC 许可，字体依赖采用 FTL／MIT／LGPL 许可。安装包包含对应原始源码压缩包、配置及构建脚本。

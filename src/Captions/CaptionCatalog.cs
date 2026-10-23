@@ -14,6 +14,7 @@ namespace BilibiliPotPlayer
     internal sealed class CaptionOptions
     {
         public bool Multilingual, DanmakuEnabled = true, Scrolling = true, Fixed = true, Colored = true, AvoidSubtitles = true, ScaleWithScreen = true, UseDanmakuColor = true;
+        public bool AssEffectsEnabled = true;
         public int SettingsVersion = 2;
         public int Region = 10, Opacity = 80, Size = 100, Speed = 100;
         public int SubtitleSize = 32, SubtitleOpacity = 100, SubtitleColor = 0xFFFFFF, SubtitleBottom = 7;
@@ -27,7 +28,7 @@ namespace BilibiliPotPlayer
         public int SubtitleOutline = 1, SubtitleOutlineColor, SubtitleBackgroundColor;
         public int DanmakuTextColor = 0xFFFFFF, DanmakuOutlineColor, DanmakuBackgroundColor;
         internal void ResetDanmaku()
-        { DanmakuEnabled = Scrolling = Fixed = Colored = AvoidSubtitles = ScaleWithScreen = UseDanmakuColor = DanmakuBold = true; Region = 10; Opacity = 80; Size = Speed = 100; DanmakuSpeedSync = false; DanmakuFont = "SimHei"; DanmakuOutline = 0; DanmakuItalic = DanmakuUniformColor = DanmakuBackground = false; DanmakuTextColor = 0xFFFFFF; DanmakuOutlineColor = DanmakuBackgroundColor = 0; }
+        { DanmakuEnabled = AssEffectsEnabled = Scrolling = Fixed = Colored = AvoidSubtitles = ScaleWithScreen = UseDanmakuColor = DanmakuBold = true; Region = 10; Opacity = 80; Size = Speed = 100; DanmakuSpeedSync = false; DanmakuFont = "SimHei"; DanmakuOutline = 0; DanmakuItalic = DanmakuUniformColor = DanmakuBackground = false; DanmakuTextColor = 0xFFFFFF; DanmakuOutlineColor = DanmakuBackgroundColor = 0; }
 
         public Dictionary<string, int> Classes = new Dictionary<string, int>();
         internal static CaptionOptions Load() { return Load(SettingsPath); }
@@ -75,6 +76,8 @@ namespace BilibiliPotPlayer
         internal readonly SubtitleSlots Slots = new SubtitleSlots();
         internal readonly CaptionOptions Options;
         internal int Revision;
+        internal double DisplayRatio { get { return streams == null || streams.CameraCandidate ? 0 : streams.DisplayRatio; } }
+        internal string MediaPath { get { return path; } }
         internal CaptionCatalog(IntPtr player, IMediaContext streams) : this(player, streams, CaptionOptions.Load(), null, null) { }
         internal CaptionCatalog(IntPtr player, IMediaContext streams, CaptionOptions options, Func<TextSource, List<TextCue>> load, Action save)
         { this.player = player; this.streams = streams; Options = options; this.load = load; saveOptions = save ?? Options.Save; Slots.Multi = Options.Multilingual; }
@@ -82,7 +85,7 @@ namespace BilibiliPotPlayer
         static List<TextSource> LoadContainer(TextSource source)
         { return NativeTimedText.Read(source.Path,source.Stream,source.Title); }
         internal static bool CanUse(TextSource source)
-        { return !source.Bitmap && !source.IntrinsicAdvanced && source.Category != TextCategory.Advanced && (source.Error.Length == 0 || source.Stream >= 0); }
+        { return !source.Bitmap && ((!source.IntrinsicAdvanced && source.Category != TextCategory.Advanced) || source.AssRenderable) && (source.Error.Length == 0 || source.Stream >= 0); }
         internal void Tick(long now)
         {
             DrainCompleted();
@@ -111,6 +114,7 @@ namespace BilibiliPotPlayer
             }
             TextSource main = Find(Slots.Main), secondary = Find(Slots.Secondary);
             EnsureLoaded(main); EnsureLoaded(secondary);
+            if (Sources.Exists(s => s.AssRenderable && s.Enabled && (s.Category == TextCategory.Advanced && Options.AssEffectsEnabled || s.Category == TextCategory.Danmaku && Options.DanmakuEnabled))) captionControlActive = true;
             if (captionControlActive || !Options.SubtitlesEnabled) SetNativeVisible(false);
         }
         void Discover()
@@ -129,12 +133,12 @@ namespace BilibiliPotPlayer
                         string extension = Path.GetExtension(file).ToLowerInvariant();
                         if (!SupportedExtension(extension) || existing.Contains(file)) continue;
                         if (++count > 256) break;
-                        try { List<TextSource> parsed = ReadFile(file); string stem = Path.GetFileNameWithoutExtension(current); foreach (TextSource source in parsed) source.Enabled = source.Category == TextCategory.Danmaku && Path.GetFileName(file).StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase); found.AddRange(parsed); }
+                        try { List<TextSource> parsed = ReadFile(file); string stem = Path.GetFileNameWithoutExtension(current); foreach (TextSource source in parsed) source.Enabled = (source.Category == TextCategory.Danmaku || source.Category == TextCategory.Advanced && source.AssRenderable) && (Path.GetFileNameWithoutExtension(file).Equals(stem,StringComparison.OrdinalIgnoreCase) || Path.GetFileName(file).StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase)); found.AddRange(parsed); }
                         catch (Exception error) { if (!(error is IOException || error is InvalidDataException || error is UnauthorizedAccessException || error is System.Xml.XmlException || error is ArgumentException || error is InvalidOperationException || error is System.Text.RegularExpressions.RegexMatchTimeoutException)) throw; found.Add(new TextSource { Id = Key(file), Path = file, Title = Path.GetFileName(file), Category = TextCategory.Uncertain, Loaded = true, Error = error.Message, Detail = "读取失败" }); }
                     }
                 }
                 catch (IOException) { } catch (UnauthorizedAccessException) { }
-                lock (sync) completed.Enqueue(delegate { if (version != generation) return; Discovering = false; Sources.AddRange(found); ApplyClasses(found); ChooseInitial(); Revision++; });
+                lock (sync) completed.Enqueue(delegate { if (version != generation) return; Discovering = false; if(found.Count>0) { Sources.AddRange(found); ApplyClasses(found); ChooseInitial(); Revision++; } });
             });
         }
         internal static bool SupportedExtension(string extension)
@@ -142,7 +146,7 @@ namespace BilibiliPotPlayer
         static List<TextSource> ReadFile(string file)
         {
             List<TextSource> sources = TimedText.Read(file);
-            for (int i = 0; i < sources.Count; i++) { TextSource source = sources[i]; source.Path = file; source.Id = Key(file) + ":" + i; source.Enabled = source.Category == TextCategory.Danmaku && source.Cues.Count > 0; }
+            for (int i = 0; i < sources.Count; i++) { TextSource source = sources[i]; source.Path = file; source.Id = Key(file) + ":" + i; source.Enabled = source.Category == TextCategory.Danmaku && source.Cues.Count > 0 || source.Category == TextCategory.Advanced && source.AssRenderable; }
             return sources;
         }
         internal void Import(string file)
@@ -195,16 +199,16 @@ namespace BilibiliPotPlayer
         }
         internal void Classify(TextSource source, TextCategory category)
         {
-            if (source.IntrinsicAdvanced && category != TextCategory.Advanced) { Status = "高级 / 代码弹幕暂不支持播放"; return; }
+            if (source.IntrinsicAdvanced && category != TextCategory.Advanced) { Status = source.AssRenderable ? "该 ASS 含有特效，保留高级分类" : "特殊协议 / 代码弹幕暂不支持播放"; return; }
             if (Slots.Main == source.Id || Slots.Secondary == source.Id) Slots.Select(source.Id);
-            source.Category = category; source.Enabled = category == TextCategory.Danmaku && CanUse(source);
+            source.Category = category; source.Enabled = (category == TextCategory.Danmaku || category == TextCategory.Advanced) && CanUse(source);
             if (source.Enabled) EnsureLoaded(source, true);
-            source.Detail = category == TextCategory.Uncertain ? "用途待确认，请拖动分类" : source.Cues.Count + (category == TextCategory.Subtitle ? " 条字幕" : category == TextCategory.Danmaku ? " 条普通弹幕" : " 条 · 暂不播放") + " · 手动分类";
+            source.Detail = category == TextCategory.Uncertain ? "用途待确认，请拖动分类" : (source.AssRenderable ? source.Events.Count : source.Cues.Count) + (category == TextCategory.Subtitle ? " 条字幕" : category == TextCategory.Danmaku ? " 条普通弹幕" : source.AssRenderable ? " 条 ASS 特效" : " 条 · 暂不播放") + " · 手动分类";
             Options.Classes[source.Id] = (int)category; saveOptions(); Status = ""; Revision++;
         }
         internal void Toggle(TextSource source)
         {
-            if (source.Category != TextCategory.Danmaku || !CanUse(source)) return;
+            if ((source.Category != TextCategory.Danmaku && source.Category != TextCategory.Advanced) || !CanUse(source)) return;
             source.Enabled = !source.Enabled;
             if (source.Enabled) EnsureLoaded(source, true);
             Revision++;
@@ -245,12 +249,15 @@ namespace BilibiliPotPlayer
                     target.Cues.Clear(); target.Cues.AddRange(parsed.Cues);
                 }
                 target.Events.Clear(); target.Events.AddRange(parsed.Events); target.Analysis = parsed.Analysis; target.AutoCategory = parsed.AutoCategory;
+                target.AssHeader = parsed.AssHeader;
+                target.ProtocolAdvanced = parsed.ProtocolAdvanced;
+                target.Fonts.Clear(); target.Fonts.AddRange(parsed.Fonts);
                 target.IntrinsicAdvanced = parsed.IntrinsicAdvanced; target.Category = parsed.Category; target.Detail = parsed.Detail; target.Loaded = true; target.Error = "";
                 int manual;
                 if (!target.IntrinsicAdvanced && Options.Classes.TryGetValue(target.Id,out manual) && manual >= 0 && manual <= 3) target.Category = (TextCategory)manual;
                 // Completion may change the automatic class, but cannot reverse a user's
                 // explicit off switch while decoding was in progress.
-                target.Enabled = target.Category == TextCategory.Danmaku && !target.IntrinsicAdvanced && (i == 0 && Options.Classes.ContainsKey(target.Id) ? wasEnabled : true);
+                target.Enabled = (target.Category == TextCategory.Danmaku && !target.IntrinsicAdvanced || target.Category == TextCategory.Advanced && target.AssRenderable) && (i == 0 && Options.Classes.ContainsKey(target.Id) ? wasEnabled : true);
                 if (target.Category != TextCategory.Subtitle && (Slots.Main == target.Id || Slots.Secondary == target.Id)) Slots.Select(target.Id);
             }
             if (Slots.Main == null && captionControlActive) { captionControlActive = false; RestoreNative(); }

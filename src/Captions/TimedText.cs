@@ -14,7 +14,8 @@ namespace BilibiliPotPlayer
     {
         internal double Start, End;
         internal string Text = "", RawContent = "", Origin = "", Style = "";
-        internal int Layer, Alignment;
+        internal string AssFields = "";
+        internal int Layer, Alignment, AssOrder;
         internal double X, Y;
         internal bool PositionKnown, DurationInferred;
         internal CueMotion Motion;
@@ -25,6 +26,10 @@ namespace BilibiliPotPlayer
     internal sealed class TextSource
     {
         internal string Id, Title, Detail = "", Path, Format = "", Error = "";
+        internal string AssHeader = "";
+        internal bool ProtocolAdvanced;
+        internal bool AssRenderable { get { return AssHeader.Length > 0 && !ProtocolAdvanced; } }
+        internal readonly List<AssFont> Fonts = new List<AssFont>();
         internal TextCategory Category, AutoCategory;
         internal CaptionAnalysis Analysis;
         internal readonly List<TextCue> Events = new List<TextCue>();

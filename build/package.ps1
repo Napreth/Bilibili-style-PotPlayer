@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'ffmpeg.ps1')
+    & (Join-Path $PSScriptRoot 'libass.ps1')
     & (Join-Path $PSScriptRoot 'native.ps1')
     & (Join-Path $PSScriptRoot 'managed.ps1') -Test
     & (Join-Path $PSScriptRoot 'skin.ps1')
@@ -28,6 +29,11 @@ Copy-Item -Path (Join-Path $repo 'third_party/FFmpeg/config.*') -Destination $no
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ffmpeg.sh'),(Join-Path $PSScriptRoot 'dependencies.lock.json') -Destination $notices
 $lock = (Get-Content (Join-Path $PSScriptRoot 'dependencies.lock.json') -Raw | ConvertFrom-Json).ffmpeg
 Copy-Item -LiteralPath (Join-Path $repo ".local/dependencies/ffmpeg-$($lock.version).tar.xz") -Destination $notices
+$assNotices=Join-Path $notices 'libass'
+New-Item -ItemType Directory -Path $assNotices -Force | Out-Null
+$assLock=(Get-Content (Join-Path $PSScriptRoot 'dependencies.lock.json') -Raw | ConvertFrom-Json).libass
+foreach($source in $assLock.sources) { Copy-Item -LiteralPath (Join-Path $repo ('.local/dependencies/'+$source.archive)) -Destination $assNotices }
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'libass.ps1'),(Join-Path $PSScriptRoot 'libass-options.json') -Destination $assNotices
 $relativeFiles = @(Get-ChildItem -LiteralPath $runtime -File -Recurse | ForEach-Object { $_.FullName.Substring($runtime.Length+1).Replace('\','/') })
 $relativeFiles | ConvertTo-Json | Set-Content (Join-Path $runtime 'installed-files.json') -Encoding UTF8
 $hashes = @(Get-ChildItem -LiteralPath $stage -File -Recurse | ForEach-Object { [ordered]@{Path=$_.FullName.Substring($stage.Length+1).Replace('\','/');SHA256=(Get-FileHash -LiteralPath $_.FullName).Hash} })

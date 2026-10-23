@@ -100,6 +100,7 @@ namespace BilibiliPotPlayer
         long paintedTime = -1;
         int paintedRevision = -1;
         Bitmap bitmap;
+        AssScene scene;
         internal IntPtr MenuWindow;
         internal TimedOverlay(CaptionCatalog catalog) : base("字幕和弹幕画面", true) { this.catalog = catalog; Cursor = Cursors.Default; }
         protected override CreateParams CreateParams
@@ -115,18 +116,18 @@ namespace BilibiliPotPlayer
         {
             if (now < nextFrame) return; nextFrame = now + 33;
             if (Native.IsIconic(player) || !Native.IsWindowVisible(player)) { Dismiss(); return; }
-            IntPtr video = Native.VideoSurface(player); Rectangle bounds = Native.ClientBounds(video);
+            IntPtr video = Native.VideoSurface(player); Rectangle bounds = PictureBounds(Native.ClientBounds(video),catalog.DisplayRatio);
             if (bounds.IsEmpty || !PlaceInPlayer(player, bounds)) { Dismiss(); return; }
             long time, status; if (!Native.Get(player, Native.GetPosition, out time) || !Native.Get(player, Native.GetPlayStatus, out status) || status == 0) { Dismiss(); return; }
             if (revision != catalog.Revision)
             {
                 revision = catalog.Revision; timeline.Clear();
-                foreach (TextSource source in catalog.Sources) if (source.Category == TextCategory.Danmaku && source.Enabled && !source.IntrinsicAdvanced) timeline.AddRange(source.Cues);
+                foreach (TextSource source in catalog.Sources) if (source.Category == TextCategory.Danmaku && source.Enabled && !source.IntrinsicAdvanced && !source.AssRenderable) timeline.AddRange(source.Cues);
                 TimedText.Sort(timeline);
             }
             TextSource main = catalog.Find(catalog.Slots.Main), secondary = catalog.Find(catalog.Slots.Secondary);
             if (!catalog.Options.SubtitlesEnabled) main = secondary = null;
-            if ((main == null || main.Bitmap || main.Cues.Count == 0) && (secondary == null || secondary.Cues.Count == 0) && (!catalog.Options.DanmakuEnabled || timeline.Count == 0)) { Dismiss(); return; }
+            if ((main == null || main.Bitmap || main.Cues.Count == 0) && (secondary == null || secondary.Cues.Count == 0) && (!catalog.Options.DanmakuEnabled || timeline.Count == 0) && !catalog.Sources.Exists(s => AssScene.Enabled(s,catalog))) { Dismiss(); return; }
             // PotPlayer raises or recreates its video child when changing fullscreen/renderers.
             // Restore our sibling order even when a paused frame needs no repaint.
             RevealBelowMenus();
@@ -139,13 +140,21 @@ namespace BilibiliPotPlayer
                 long nativeSpeed; Native.Get(player, Native.GetSpeed, out nativeSpeed);
                 List<DanmakuPlacement> comments = DanmakuLayout.Frame(timeline, position, Width, Height, catalog.Options, delegate(TextCue cue, float size)
                 { using (Font font = DanmakuSettings.FontFor(size, catalog.Options)) return graphics.MeasureString(cue.Text.Replace('\n', ' '), font).Width; }, nativeSpeed > 0 ? nativeSpeed / 1000.0 : 1);
-                foreach (DanmakuPlacement comment in comments)
-                    DrawStyled(graphics, comment.Cue.Text.Replace('\n', ' '), comment.Size, Color.FromArgb(catalog.Options.Opacity * 255 / 100, Color.FromArgb(DanmakuSettings.ColorFor(comment.Cue, catalog.Options) | unchecked((int)0xFF000000))), new RectangleF(comment.X, comment.Y, comment.Width + 8, comment.Size * 1.8f), false, catalog.Options.DanmakuBackground, catalog.Options, true);
-                float bottom = Height * (1 - catalog.Options.SubtitleBottom / 100f);
-                if (secondary != null && !secondary.Bitmap) bottom = Captions(graphics, secondary, position, bottom, 0.9f);
-                if (main != null && !main.Bitmap) Captions(graphics, main, position, bottom, 1);
+                // libass composites all text into the same premultiplied surface.
+                // The native renderer is called after releasing GDI's bitmap lock.
+                pendingComments = comments;
             }
+            if (scene == null) scene = new AssScene();
+            scene.Render(bitmap,catalog,time,pendingComments);
             if (!Visible) Reveal(false); Present(Handle, bitmap); paintedTime = time; paintedRevision = catalog.Revision;
+        }
+        List<DanmakuPlacement> pendingComments;
+        internal static Rectangle PictureBounds(Rectangle viewport,double ratio)
+        {
+            if(ratio<=0 || Double.IsNaN(ratio) || Double.IsInfinity(ratio)) return viewport;
+            int width=viewport.Width, height=(int)Math.Round(width/ratio);
+            if(height>viewport.Height) { height=viewport.Height; width=(int)Math.Round(height*ratio); }
+            return new Rectangle(viewport.Left+(viewport.Width-width)/2,viewport.Top+(viewport.Height-height)/2,width,height);
         }
         void RevealBelowMenus()
         {
@@ -153,36 +162,6 @@ namespace BilibiliPotPlayer
             // Keep the text plane immediately above the video, below all visible interactive
             // surfaces. Raising it to HWND_TOP every frame otherwise covers paused menus.
             if (MenuWindow != IntPtr.Zero && Native.IsWindowVisible(MenuWindow)) Native.SetWindowPos(Handle, MenuWindow, 0, 0, 0, 0, 0x0013);
-        }
-        float Captions(Graphics graphics, TextSource source, double position, float bottom, float ratio)
-        {
-            List<TextCue> cues = DanmakuLayout.Active(source.Cues, position);
-            string text = String.Join("\n", cues.ConvertAll(c => c.Text)); if (text.Length == 0) return bottom;
-            float size = Math.Max(12, catalog.Options.SubtitleSize * Height / 1080f * ratio);
-            float width = Width * 0.9f, height;
-            using (Font font = DanmakuSettings.TextFont(size, catalog.Options, false)) height = graphics.MeasureString(text, font, (int)width).Height + 8;
-            RectangleF box = new RectangleF(Width * 0.05f, Math.Max(0, bottom - height), width, height);
-            Color color = Color.FromArgb(catalog.Options.SubtitleOpacity * 255 / 100, Color.FromArgb(catalog.Options.SubtitleColor | unchecked((int)0xFF000000)));
-            DrawStyled(graphics, text, size, color, box, true, catalog.Options.SubtitleBackground, catalog.Options); return box.Top - 4;
-        }
-        internal static void DrawStyled(Graphics graphics, string text, float size, Color color, RectangleF box, bool center, bool background, CaptionOptions options, bool danmaku = false)
-        {
-            using (Font textFont = DanmakuSettings.TextFont(size, options, danmaku))
-            using (FontFamily family = textFont.FontFamily)
-            using (StringFormat format = new StringFormat { Alignment = center ? StringAlignment.Center : StringAlignment.Near, LineAlignment = StringAlignment.Near })
-            using (GraphicsPath path = new GraphicsPath())
-            using (Pen outline = new Pen(Color.FromArgb(color.A, Color.FromArgb((danmaku ? options.DanmakuOutlineColor : options.SubtitleOutlineColor) | unchecked((int)0xFF000000))), Math.Max(1.5f, size / ((danmaku ? options.DanmakuOutline : options.SubtitleOutline) == 0 ? 8f : 12f))) { LineJoin = LineJoin.Round })
-            using (Brush fill = new SolidBrush(color))
-            {
-                if (background) using (Brush back = new SolidBrush(Color.FromArgb(color.A * 140 / 255, Color.FromArgb((danmaku ? options.DanmakuBackgroundColor : options.SubtitleBackgroundColor) | unchecked((int)0xFF000000))))) graphics.FillRectangle(back, box);
-                FontStyle style = textFont.Style;
-                path.AddString(text, family, (int)style, size, box, format);
-                if ((danmaku ? options.DanmakuOutline : options.SubtitleOutline) == 2)
-                    using (GraphicsPath shadow = (GraphicsPath)path.Clone()) using (Matrix offset = new Matrix()) using (Brush dark = new SolidBrush(Color.FromArgb(color.A, Color.FromArgb((danmaku ? options.DanmakuOutlineColor : options.SubtitleOutlineColor) | unchecked((int)0xFF000000)))))
-                    { offset.Translate(Math.Max(1, size / 12), Math.Max(1, size / 12)); shadow.Transform(offset); graphics.FillPath(dark, shadow); }
-                else if ((danmaku ? options.DanmakuOutline : options.SubtitleOutline) != 3) graphics.DrawPath(outline, path);
-                graphics.FillPath(fill, path);
-            }
         }
         [StructLayout(LayoutKind.Sequential)] struct Size2 { internal int Width, Height; }
         [StructLayout(LayoutKind.Sequential, Pack = 1)] struct Blend { internal byte Op, Flags, Alpha, Format; }
@@ -196,7 +175,7 @@ namespace BilibiliPotPlayer
             }
             finally { SelectObject(memory, previous); DeleteObject(bitmapHandle); DeleteDC(memory); ReleaseDC(IntPtr.Zero, screen); }
         }
-        protected override void Dispose(bool disposing) { if (disposing && bitmap != null) bitmap.Dispose(); base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { if(bitmap != null) bitmap.Dispose(); if(scene != null) scene.Dispose(); } base.Dispose(disposing); }
         [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr window);
         [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr window, IntPtr dc);
         [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);

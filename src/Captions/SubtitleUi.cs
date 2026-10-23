@@ -111,7 +111,7 @@ namespace BilibiliPotPlayer
                 // Keep the source slot empty throughout the drag; its neighbours do not move.
                 if (dragging && source == dragSource) continue;
                 PaintRow(graphics, source, x, rowY, width, hits.Count == hovered);
-                Register(rect, delegate { if (!CaptionCatalog.CanUse(source)) return; if (category == TextCategory.Subtitle) catalog.Select(source); else if (category == TextCategory.Danmaku) catalog.Toggle(source); }, source);
+                Register(rect, delegate { if (!CaptionCatalog.CanUse(source)) return; if (category == TextCategory.Subtitle) catalog.Select(source); else if (category == TextCategory.Danmaku || category == TextCategory.Advanced) catalog.Toggle(source); }, source);
             }
             int pages = CaptionPages.Count(sources.Count, count), visible = Math.Min(5, pages), firstDot = CaptionPages.WindowStart(listPages[list], pages);
             if (pages <= 1) return;
@@ -227,7 +227,7 @@ namespace BilibiliPotPlayer
             FilterIcon(graphics, 0, 327, options.Scrolling, delegate { options.Scrolling = !options.Scrolling; Changed(); });
             FilterIcon(graphics, 1, 395, options.Fixed, delegate { options.Fixed = !options.Fixed; Changed(); });
             FilterIcon(graphics, 2, 463, options.Colored, delegate { options.Colored = !options.Colored; Changed(); });
-            FilterIcon(graphics, 3, 531, false, delegate { catalog.Status = L("高级弹幕暂不支持播放", "Advanced danmaku unavailable"); Invalidate(); });
+            FilterIcon(graphics, 3, 531, options.AssEffectsEnabled, delegate { options.AssEffectsEnabled = !options.AssEffectsEnabled; Changed(); });
             Checkbox(graphics, L("弹幕随屏幕缩放", "Scale with screen"), 330, 382, 166, options.ScaleWithScreen, delegate { options.ScaleWithScreen = !options.ScaleWithScreen; Changed(); });
             Checkbox(graphics, L("防挡字幕", "Avoid subtitles"), 500, 382, 106, options.AvoidSubtitles, delegate { options.AvoidSubtitles = !options.AvoidSubtitles; Changed(); });
             CompactSlider(graphics, L("显示区域", "Area"), 417, options.Region, 10, 100, options.Region + "%", value => options.Region = value, DanmakuSettings.Regions);
@@ -322,11 +322,19 @@ namespace BilibiliPotPlayer
             }
             Line(graphics, 24, 548, 596, 548);
             // Preview uses the same family, weight and colors as the actual renderer.
-            RectangleF preview = R(24, 566, 572, 42); bool background = dm ? o.DanmakuBackground : o.SubtitleBackground;
-            TimedOverlay.DrawStyled(graphics, L("字幕和弹幕 · 文字预览", "Subtitles & danmaku · Preview"), 18 * scale,
-                Color.FromArgb((dm ? DanmakuSettings.ColorFor(new TextCue(), o) : o.SubtitleColor) | unchecked((int)0xFF000000)), preview, true, background, o, dm);
+            RectangleF preview = R(24, 566, 572, 42);
+            AssPreview(graphics,L("字幕和弹幕 · 文字预览", "Subtitles & danmaku · Preview"),preview,o,dm);
             if (dm) Link(graphics, L("恢复默认设置", "Restore defaults"), 24, 618, 180, delegate { o.ResetDanmaku(); picker = 0; Changed(); });
             else Label(graphics, L("图像字幕沿用原生渲染", "Bitmap subtitles use native rendering"), R(24, 618, 570, 26), muted, false, 11);
+        }
+        LibassRenderer previewRenderer;
+        void AssPreview(Graphics graphics,string text,RectangleF bounds,CaptionOptions options,bool dm)
+        {
+            if(previewRenderer==null) previewRenderer=new LibassRenderer();
+            using(Bitmap bitmap=new Bitmap(Math.Max(1,(int)bounds.Width),Math.Max(1,(int)bounds.Height),System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
+                string script=AssScene.Header(bitmap.Width,bitmap.Height,options)+"Dialogue: 0,0:00:00.00,1:00:00.00,"+(dm?"Danmaku":"Subtitle")+",,0,0,0,,{\\an5\\pos("+(bitmap.Width/2)+","+(bitmap.Height/2)+")\\fs"+(18*scale).ToString(System.Globalization.CultureInfo.InvariantCulture)+"}"+AssScene.Escape(text)+"\n";
+                previewRenderer.SetTrack("preview",script); previewRenderer.Render(bitmap,"preview",0); graphics.DrawImageUnscaled(bitmap,(int)bounds.Left,(int)bounds.Top);
+            }
         }
         void Picker(Graphics g)
         {
@@ -418,6 +426,6 @@ namespace BilibiliPotPlayer
         }
         protected override void OnPaint(PaintEventArgs e)
         { base.OnPaint(e); hits.Clear(); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; if (page == 0) MainPage(e.Graphics); else { SettingsPage(e.Graphics); Picker(e.Graphics); } using (Pen border = new Pen(Color.FromArgb(62, 63, 70))) e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1); if (page == 0) DraggedRow(e.Graphics); }
-        protected override void Dispose(bool disposing) { if (disposing) { tip.Dispose(); } base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { tip.Dispose(); if(previewRenderer!=null) previewRenderer.Dispose(); } base.Dispose(disposing); }
     }
 }

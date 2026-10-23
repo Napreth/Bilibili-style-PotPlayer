@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace BilibiliPotPlayer
 {
@@ -32,16 +33,25 @@ namespace BilibiliPotPlayer
             if (s.StartsWith("&H",StringComparison.OrdinalIgnoreCase)) return Int64.TryParse(s.Substring(2),NumberStyles.HexNumber,Inv,out n) ? n : fallback;
             return Int64.TryParse(s,out n) ? n : fallback;
         }
+        internal static bool IsSectionHeader(string line)
+        { return line.Equals("[Script Info]",StringComparison.OrdinalIgnoreCase) || line.Equals("[V4 Styles]",StringComparison.OrdinalIgnoreCase) || line.Equals("[V4+ Styles]",StringComparison.OrdinalIgnoreCase) || line.Equals("[Events]",StringComparison.OrdinalIgnoreCase) || line.Equals("[Fonts]",StringComparison.OrdinalIgnoreCase) || line.Equals("[Graphics]",StringComparison.OrdinalIgnoreCase); }
         internal static void Parse(string value, TextSource source)
         {
             source.Format = "ASS / SSA";
+            Match eventSection = Regex.Match(value,@"(?im)^\s*\[Events\]",RegexOptions.None,TimeSpan.FromMilliseconds(200));
+            string prelude = eventSection.Success ? value.Substring(0,eventSection.Index) : "[Script Info]\nScriptType: v4.00+\n";
+            StringBuilder trailingFonts = new StringBuilder(); bool seenEvents = false;
             double width = 0, height = 0; string section = "";
             string[] fields = { "Layer","Start","End","Style","Name","MarginL","MarginR","MarginV","Effect","Text" }, styleFields = new string[0];
             var styles = new Dictionary<string,Style>(StringComparer.OrdinalIgnoreCase);
             bool declared = Regex.IsMatch(value,@"(?im)^(?:;|Title:|Original Script:|Script Updated By:).*?(?:danmaku|danmu|弹幕|bilibili.*(?:xml|comment))",RegexOptions.None,TimeSpan.FromMilliseconds(200));
             foreach (string raw in value.Replace("\r","").Split('\n')) {
                 string line = raw.Trim();
-                if (line.StartsWith("[")) { section = line.ToLowerInvariant(); continue; }
+                // ASS's font encoding includes '['. Only actual section names
+                // terminate font data; arbitrary encoded rows must survive intact.
+                if (section=="[fonts]" && !IsSectionHeader(line)) { if(seenEvents) trailingFonts.AppendLine(raw); continue; }
+                if (line.StartsWith("[")) { section = line.ToLowerInvariant(); if(section=="[events]") seenEvents=true; if(seenEvents && section=="[fonts]") trailingFonts.AppendLine(raw); continue; }
+                if (seenEvents && section=="[fonts]") trailingFonts.AppendLine(raw);
                 if (section == "[script info]") {
                     if (line.StartsWith("PlayResX:",StringComparison.OrdinalIgnoreCase)) Number(line.Substring(9),out width);
                     if (line.StartsWith("PlayResY:",StringComparison.OrdinalIgnoreCase)) Number(line.Substring(9),out height);
@@ -69,9 +79,12 @@ namespace BilibiliPotPlayer
                 string body = Field(fields,parts,"Text"), styleName = Field(fields,parts,"Style","Default");
                 Style selected; if (!styles.TryGetValue(styleName,out selected)) selected = new Style();
                 TextCue cue = new TextCue { Start = TimedText.Time(Field(fields,parts,"Start")), End = TimedText.Time(Field(fields,parts,"End")), RawContent = body, Text = TimedText.Plain(body), Style = styleName, Layer = (int)Get(fields,parts,"Layer",Get(fields,parts,"Marked",0)), Origin = "ASS", Motion = CueMotion.Static, Declared = declared ? (TextCategory?)TextCategory.Danmaku : null };
+                cue.AssFields = String.Join(",",new[] { cue.Layer.ToString(Inv),styleName,Field(fields,parts,"Name"),Field(fields,parts,"MarginL","0"),Field(fields,parts,"MarginR","0"),Field(fields,parts,"MarginV","0"),Field(fields,parts,"Effect"),body });
+                cue.AssOrder=source.Events.Count;
                 Analyze(cue,selected,styles,width,height,Get(fields,parts,"MarginL",0),Get(fields,parts,"MarginR",0),Get(fields,parts,"MarginV",0),Field(fields,parts,"Effect"));
                 TimedText.Add(source,cue);
             }
+            source.AssHeader = prelude + "\n" + trailingFonts + "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
         }
         static int LegacyAlignment(int a) { return a >= 1 && a <= 3 ? a : a >= 5 && a <= 7 ? a + 2 : a >= 9 && a <= 11 ? a - 5 : 0; }
         static List<Tag> Tags(string text)

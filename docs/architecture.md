@@ -1,6 +1,6 @@
 # 模块架构
 
-PotPlayer 的 .as 播放扩展启动 `BilibiliBehaviors.exe --from-player`。薄 EXE 进入 Runtime，业务运行在独立宿主进程；原生 PlayerLayout hook 在播放器 UI 线程处理几何。播放、解码和渲染仍由 PotPlayer 完成。
+PotPlayer 的 .as 播放扩展启动 `BilibiliBehaviors.exe --from-player`。薄 EXE 进入 Runtime，业务运行在独立宿主进程；原生 PlayerLayout hook 在播放器 UI 线程处理几何。音视频播放、解码和画面渲染由 PotPlayer 完成，文本字幕和弹幕在宿主内交给 libass 渲染。
 
 | 程序集 | 依赖 | 职责 |
 |---|---|---|
@@ -9,7 +9,7 @@ PotPlayer 的 .as 播放扩展启动 `BilibiliBehaviors.exe --from-player`。薄
 | Input | Contracts、Platform | 键鼠 hook、输入状态机、360° 手势 |
 | Windowing | Contracts、Platform | 响应尺寸、侧栏意图、比例锁定、原生布局桥接 |
 | Media | Contracts、Platform | MediaInfo、元数据补充探测、音视频选轨及界面 |
-| Captions | Contracts、Platform | 时间文本、来源、主副选择、弹幕、设置及 FFmpeg 适配调用 |
+| Captions | Contracts、Platform | 时间文本、来源、主副选择、弹幕、设置及 FFmpeg／libass 适配调用 |
 | Playback | Contracts、Platform、Media | 控制栏、进度、音量、倍速及媒体参数绘制 |
 | Runtime | 上述模块 | 模块版本检查、单实例、窗口会话、统一更新和释放 |
 
@@ -26,6 +26,7 @@ PotPlayer 的 .as 播放扩展启动 `BilibiliBehaviors.exe --from-player`。薄
 - `PlayerLayout.dll` 保留已有提交前几何和重入保护。
 - `BilibiliTimedText.dll` 使用 FFmpeg 公共 API 枚举第 n 条字幕，回传保留样式头和覆盖标签的 ASS 事件给统一分类器，并保留诊断用 SRT 导出。C# 不复制 FFmpeg ABI 结构体。只接受本地文件，并限制提取时长、内容大小和条目数。识别和拆分规则见 [字幕与弹幕自动分类](algorithms/caption-classification.md)。
 - 三个 FFmpeg LGPL DLL 独立分发并可替换；精确源码、配置和许可随安装包提供。系统 ffmpeg.exe 不参与运行。
+- `BilibiliAss.dll` 使用 libass 公共 API 管理字体、轨道与帧，合成预乘 BGRA 后交给现有透明窗口。`libass-9.dll` 动态分发，字体依赖静态链接于该 DLL；每个播放器的渲染上下文随媒体更换重建、随窗口关闭释放。细节见 [渲染说明](rendering.md)。
 
 ## 构建与皮肤
 

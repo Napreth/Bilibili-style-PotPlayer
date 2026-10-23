@@ -8,5 +8,44 @@
     "version": "6.7.3",
     "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe",
     "sha256": "9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732"
+  },
+  "libass": {
+    "version": "0.17.5",
+    "meson": "1.10.0",
+    "ninja": "1.13.0",
+    "sources": [
+      {
+        "name": "libass",
+        "version": "0.17.5",
+        "directory": "libass-0.17.5",
+        "archive": "libass-0.17.5.tar.gz",
+        "url": "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.gz",
+        "sha256": "CAAB4B993DD7BE6187C55623B789ED75DDDEFEA6E65938AF134637C732FE094A"
+      },
+      {
+        "version": "2.15.0",
+        "sha256": "87C7F1F8699B91E89F773F7DCFA505B044E1DAE67F62A55D4E29C3AFDCAC4FB8",
+        "archive": "freetype-2.15.0.tar.gz",
+        "directory": "freetype-VER-2-15-0",
+        "name": "freetype",
+        "url": "https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-15-0"
+      },
+      {
+        "version": "15.0.0",
+        "sha256": "968536E9ABD782F07F7954044C0C4020199FCDD39B41D221EC42D2A3BE4A44DF",
+        "archive": "harfbuzz-15.0.0.tar.xz",
+        "directory": "harfbuzz-15.0.0",
+        "name": "harfbuzz",
+        "url": "https://github.com/harfbuzz/harfbuzz/releases/download/15.0.0/harfbuzz-15.0.0.tar.xz"
+      },
+      {
+        "version": "1.0.17",
+        "sha256": "6949DCDE27D41CEBAD1FD741FCAFC36D55A1020D2D872D4A6EB3914CAABBADA2",
+        "archive": "fribidi-1.0.17.tar.xz",
+        "directory": "fribidi-1.0.17",
+        "name": "fribidi",
+        "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.17/fribidi-1.0.17.tar.xz"
+      }
+    ]
   }
 }
