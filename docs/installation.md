@@ -32,7 +32,7 @@ FFmpeg 动态库读取容器内文本字幕，无需安装 ffmpeg.exe。构建�
 
 `build/libass.ps1` 构建 libass 共享库，固定选项在 `build/libass-options.json`。使用系统 DirectWrite 选字，FreeType、HarfBuzz 和 FriBidi 静态链接进 libass；无需安装字体引擎或调整 PATH。FreeType 采用 FTL 许可。可以用 ABI 兼容的共享库替换随包 DLL；源码与重建配置随包提供。
 
-`build/danmaku-factory.ps1` 从固定子模块构建转换 DLL，PCRE2 按锁定版本静态构建。安装包保存实际使用的核心源码快照、Git 版本及本地修改标记，不安装上游 CLI 或 GUI。许可证统一放在 `LICENSES/`；源码和构建脚本位于 `third-party/danmaku-factory/`。
+`build/danmaku-factory.ps1` 从固定子模块构建转换 DLL，PCRE2 按锁定版本静态构建。`-DependenciesOnly` 准备上游核心和 PCRE2 静态库，`-BridgeOnly` 只编译本项目的桥接 DLL；`build/native.ps1` 使用后者，复用已准备的静态库。修改上游源码后先重新运行依赖构建。安装包保存实际使用的核心源码快照、Git 版本及本地修改标记，不安装上游 CLI 或 GUI。许可证统一放在 `LICENSES/`；源码和构建脚本位于 `third-party/danmaku-factory/`。
 
 `build/out/runtime` 是开发运行目录，`build/out/package` 是安装载荷，`build/out/dist` 保存安装 EXE。构建产物不提交；仓库保留原生 DLL、第三方库与皮肤包。
 
@@ -49,4 +49,14 @@ FFmpeg 动态库读取容器内文本字幕，无需安装 ffmpeg.exe。构建�
 
 真实窗口检查使用 `build/out/runtime/BilibiliBehaviors.Tests.exe --window-check`、`--aspect-check`、`--chrome-check` 等。它们会操作测试播放器，应在专用测试环境使用。`--status` 与 `--ui-status` 只读。
 
-GitHub Actions 对 push、pull request 和手动触发执行完整 Windows 构建，生成安装包工件，不自动发布 Release。
+## CI
+
+| 触发方式 | 外部依赖 | 本项目与检查 | 安装 EXE 工件 |
+| --- | --- | --- | --- |
+| 普通 push／pull request | 命中缓存时复用，缺失时编译一次并保存 | 每次编译原生桥接 DLL、C# 和皮肤，验证逻辑、真实 DLL／像素渲染、安装升级卸载 | 不生成 |
+| Actions 页面手动 Run workflow | 从源码重新构建并保存新缓存 | 完整检查 | 生成 |
+| 推送任意 tag | 从源码重新构建并保存新缓存 | 完整检查 | 生成 |
+
+缓存按 Windows runner、GCC 版本、依赖锁文件、构建脚本／选项及 DanmakuFactory 源码内容区分，不跨依赖版本回退。只保存可复用的 DLL／静态库、导入库、头文件、许可和源码包，不保存带绝对路径的 Meson／CMake 构建目录；恢复前校验全部文件 SHA-256。普通运行仍准备安装载荷并执行安装恢复检查。
+
+外部构建成功后立即保存缓存，后续项目编译或测试失败也不会丢失它。手动／tag 完整构建用独立缓存键刷新同一依赖版本，后续可见该缓存的分支运行使用最新一份。缓存被平台清理时会再次编译。CI 不自动发布 Release。

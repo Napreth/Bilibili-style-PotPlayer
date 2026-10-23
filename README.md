@@ -109,7 +109,7 @@ git submodule update --init --recursive
 .\scripts\dev.ps1 status
 ```
 
-`build/` 保存构建、依赖下载、安装与卸载逻辑，`scripts/` 保存开发诊断和样本生成。GitHub Actions 初始化子模块，在 Windows 上从源码构建 LGPL FFmpeg、libass 和 DanmakuFactory，运行逻辑、原生提取、实际转换／像素渲染及安装恢复检查，生成安装包工件，不自动发布 Release。
+`build/` 保存构建、依赖下载、安装与卸载逻辑，`scripts/` 保存开发诊断和样本生成。GitHub Actions 的普通 push／PR 复用第三方依赖缓存，每次编译本项目 DLL，运行逻辑、原生提取、转换／像素渲染和安装恢复检查。缓存缺失或依赖输入改变时编译一次并缓存；手动触发或推送 tag 时完整重建外部依赖并生成安装包工件，不自动发布 Release。详细流程见 [安装与构建说明](docs/installation.md#ci)。
 
 ## 目录
 

@@ -4,7 +4,7 @@ $repo = Split-Path $PSScriptRoot -Parent
 if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot 'ffmpeg.ps1')
     & (Join-Path $PSScriptRoot 'libass.ps1')
-    & (Join-Path $PSScriptRoot 'danmaku-factory.ps1')
+    & (Join-Path $PSScriptRoot 'danmaku-factory.ps1') -DependenciesOnly
     & (Join-Path $PSScriptRoot 'native.ps1')
     & (Join-Path $PSScriptRoot 'managed.ps1') -Test
     & (Join-Path $PSScriptRoot 'skin.ps1')

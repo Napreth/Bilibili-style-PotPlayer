@@ -1,4 +1,4 @@
-name: Windows build and installer
+name: Windows checks and release build
 on:
   push:
   pull_request:
@@ -12,6 +12,8 @@ jobs:
   windows:
     runs-on: windows-2025
     timeout-minutes: 45
+    env:
+      FULL_BUILD: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     defaults:
       run:
         shell: pwsh
@@ -28,25 +30,64 @@ jobs:
           install: >-
             make
             mingw-w64-x86_64-gcc
+      - name: Select dependency cache
+        id: dependencies
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+          INPUT_HASH: ${{ hashFiles('build/dependencies.lock.json', 'build/ffmpeg.ps1', 'build/ffmpeg.sh', 'build/libass.ps1', 'build/libass-options.json', 'build/danmaku-factory.ps1', 'build/dependency-cache.ps1', '.gitmodules', 'third_party/DanmakuFactory/src/**', 'third_party/DanmakuFactory/LICENSE', 'third_party/DanmakuFactory/xmake.lua') }}
+        run: |
+          $gcc = & "$env:MSYS2_LOCATION\mingw64\bin\gcc.exe" -dumpfullversion
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot identify the dependency compiler.' }
+          "key=windows-2025-x64-gcc-$gcc-$env:INPUT_HASH" >> $env:GITHUB_OUTPUT
+      - name: Restore external dependency cache
+        if: env.FULL_BUILD != 'true'
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .local/ci-dependencies
+          key: ${{ steps.dependencies.outputs.key }}
+          restore-keys: ${{ steps.dependencies.outputs.key }}-
       - name: Verify and extract FFmpeg source
+        if: env.FULL_BUILD == 'true' || steps.cache.outputs.cache-matched-key == ''
         run: ./build/ffmpeg.ps1 -PrepareOnly
       - name: Build LGPL-only FFmpeg shared libraries
+        if: env.FULL_BUILD == 'true' || steps.cache.outputs.cache-matched-key == ''
         shell: msys2 {0}
         run: |
           cd .local/dependencies/ffmpeg-8.0.1
           bash ../../../build/ffmpeg.sh
-      - name: Compile native modules and managed DLLs; run checks
+      - name: Build external libraries on cache miss or full build
+        if: env.FULL_BUILD == 'true' || steps.cache.outputs.cache-matched-key == ''
         env:
           MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: |
           $env:PATH = "$env:MSYS2_LOCATION\mingw64\bin;" + $env:PATH
           ./build/ffmpeg.ps1 -CollectOnly
           ./build/libass.ps1 -Rebuild
-          ./build/danmaku-factory.ps1 -Rebuild
+          ./build/danmaku-factory.ps1 -Rebuild -DependenciesOnly
+          ./build/dependency-cache.ps1 -Mode Export
+      # Save immediately, so a later project compile/test failure keeps the dependencies.
+      - name: Save freshly built external dependencies
+        if: env.FULL_BUILD == 'true' || steps.cache.outputs.cache-matched-key == ''
+        uses: actions/cache/save@v6
+        with:
+          path: .local/ci-dependencies
+          key: ${{ steps.dependencies.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Restore verified dependency files
+        run: ./build/dependency-cache.ps1 -Mode Restore
+      - name: Compile project native modules and managed DLLs; run checks
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $env:PATH = "$env:MSYS2_LOCATION\mingw64\bin;" + $env:PATH
           ./build/native.ps1
           ./build/managed.ps1 -Test
           ./build/skin.ps1
-      - name: Build Windows installer
+      - name: Prepare test payload
+        if: env.FULL_BUILD != 'true'
+        run: ./build/package.ps1 -SkipBuild -NoInstaller
+      - name: Build Windows installer for manual or tag runs
+        if: env.FULL_BUILD == 'true'
         run: ./build/package.ps1 -SkipBuild
       - name: Verify installation, upgrades and removal
         shell: powershell
@@ -54,6 +95,7 @@ jobs:
           ./scripts/check-package.ps1
           ./scripts/test-installation.ps1
       - name: Upload installer and checksum manifest
+        if: env.FULL_BUILD == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: BilibiliBehaviors-win-x64

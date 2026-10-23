@@ -1,3 +1,6 @@
+/* GetDpiForWindow is part of the supported Windows 10 API surface. */
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
 #define UNICODE
 #define _UNICODE
 #include <windows.h>
