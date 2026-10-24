@@ -20,7 +20,7 @@ internal static class DanmakuPlaybackChecks
     {
         Action<bool,string> check=(value,label)=>equal(true,value,label);
         Func<TextCue,float,CaptionOptions,float> measure=(cue,size,style)=>80*size/20;
-        var options=new CaptionOptions { Region=10,ScaleWithScreen=false,AvoidSubtitles=false,Opacity=100 };
+        var options=new CaptionOptions { Region=10,ScaleWithScreen=false,AvoidSubtitles=false,Opacity=100,Size=100 };
         var live=new DanmakuPlayback(); var first=Cue(0,"first"); var dropped=Cue(.1,"dropped"); var future=Cue(1,"future");
         var cues=new List<TextCue> { first,dropped,future };
         var frame=live.Frame(cues,0,320,180,options,measure,0);
@@ -46,7 +46,7 @@ internal static class DanmakuPlaybackChecks
         frame=live.Frame(cues,.016,320,180,options,measure,.016);
         check(frame[0].X>-frame[0].Width,"reverse scrolling moves inward after edge admission");
 
-        options=new CaptionOptions { Region=100,ScaleWithScreen=false,AvoidSubtitles=false,Opacity=100 };
+        options=new CaptionOptions { Region=100,ScaleWithScreen=false,AvoidSubtitles=false,Opacity=100,Size=100 };
         using(var catalog=new CaptionCatalog(IntPtr.Zero,null,options,null,delegate {}))
         using(var scene=new AssScene()) using(var bitmap=new Bitmap(320,180,PixelFormat.Format32bppPArgb))
         {

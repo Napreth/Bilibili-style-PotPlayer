@@ -84,7 +84,7 @@ internal static class TimedTextChecks
         options.DanmakuSpeedSync = true;
         check(DanmakuTestFrames.At(timeline, 3, 1000, 1000, options, (cue, size) => 100, 2)[0].X == normalX, "speed sync follows media time at 2x");
         options.SubtitleSize = 48; options.Classes["keep"] = 2; options.ResetDanmaku();
-        check(options.Region == 10 && options.Opacity == 80 && options.Size == 100 && options.Speed == 100 && options.UseDanmakuColor && !options.DanmakuSpeedSync, "restore defaults resets ordinary danmaku controls");
+        check(options.Region == 10 && options.Opacity == 80 && options.Size == 100 && options.Speed == 100 && options.UseDanmakuColor && !options.DanmakuSpeedSync && !options.ScaleWithScreen && !options.DanmakuBold && options.DanmakuOutline==1, "restore defaults selects the web-size regular-weight outline preset without screen scaling");
         check(options.SubtitleSize == 48 && options.Classes["keep"] == 2, "restoring danmaku defaults preserves subtitles and classifications");
         foreach (string font in DanmakuSettings.Fonts)
         {

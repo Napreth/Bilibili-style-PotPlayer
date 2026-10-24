@@ -30,6 +30,10 @@ namespace BilibiliPotPlayer
             }
         }
         internal static int ColorFor(TextCue cue, CaptionOptions options) { return options.UseDanmakuColor ? options.DanmakuUniformColor ? options.DanmakuTextColor : cue.Color : 0xFFFFFF; }
+        internal static float ScreenScale(int height,CaptionOptions options,float dpi)
+        { return options.ScaleWithScreen ? height/(720f*dpi) : 1; }
+        internal static float SizeFor(TextCue cue,int height,CaptionOptions options,float dpi)
+        { return Math.Max(8*dpi,Math.Min(512,(float)(25*dpi*cue.Size/Math.Max(1,cue.DanmakuBaseSize))*ScreenScale(height,options,dpi)*options.Size/100f)); }
 
     }
     internal sealed class DanmakuPlacement
@@ -40,6 +44,7 @@ namespace BilibiliPotPlayer
         internal bool Timed;
         internal CaptionOptions Appearance;
         internal int CanvasWidth, CanvasHeight, ClipHeight;
+        internal float DpiScale = 1;
     }
     internal static class DanmakuLayout
     {
@@ -48,14 +53,21 @@ namespace BilibiliPotPlayer
         internal static void Collect(CaptionCatalog catalog, List<TextCue> timeline)
         {
             timeline.Clear();
-            foreach (TextSource source in catalog.Sources) if (UsesLayout(source))
-                foreach (TextCue cue in source.Cues) if (cue.Mode < 7 && (cue.Effects & (CueEffects.Animation | CueEffects.Drawing | CueEffects.Protocol)) == 0) timeline.Add(cue);
+            foreach (TextSource source in catalog.Sources) if (UsesLayout(source)) {
+                double baseline=25;
+                if(source.AssRenderable) {
+                    var counts=new Dictionary<int,int>(); int most=0;
+                    foreach(TextCue cue in source.Cues) if(cue.Size>0) { int count; counts.TryGetValue(cue.Size,out count); counts[cue.Size]=++count; if(count>most) {most=count;baseline=cue.Size;} }
+                }
+                foreach (TextCue cue in source.Cues) if (cue.Mode < 7 && (cue.Effects & (CueEffects.Animation | CueEffects.Drawing | CueEffects.Protocol)) == 0) { cue.DanmakuBaseSize=baseline; timeline.Add(cue); }
+            }
             TimedText.Sort(timeline);
         }
-        internal static int AreaHeight(int height, CaptionOptions options)
+        internal static int AreaHeight(int height, CaptionOptions options, Rectangle? pictureBounds=null)
         {
             int available = height * options.Region / 100;
-            if (options.AvoidSubtitles && options.SubtitlesEnabled) available = Math.Min(available, height - (int)(height * options.SubtitleBottom / 100f + options.SubtitleSize * height / 1080f * 4 + 16));
+            Rectangle picture=pictureBounds??new Rectangle(0,0,1,height);
+            if (options.AvoidSubtitles && options.SubtitlesEnabled) available = Math.Min(available, picture.Bottom - (int)(picture.Height * options.SubtitleBottom / 100f + options.SubtitleSize * picture.Height / 1080f * 4 + 16));
             return Math.Max(0, Math.Min(height, available));
         }
         internal static int LowerBound(List<TextCue> cues, double time)
@@ -100,7 +112,7 @@ namespace BilibiliPotPlayer
             if (now < nextFrame) return; nextFrame = now + 10;
             if (mediaPath != catalog.MediaPath) { mediaPath = catalog.MediaPath; clock.Reset(); playback.Reset(); nextSample = 0; }
             if (Native.IsIconic(player) || !Native.IsWindowVisible(player)) { Dismiss(); return; }
-            IntPtr video = Native.VideoSurface(player); Rectangle bounds = PictureBounds(Native.ClientBounds(video),catalog.DisplayRatio);
+            IntPtr video = Native.VideoSurface(player); Rectangle bounds = Native.ClientBounds(video);
             if (bounds.IsEmpty || !PlaceInPlayer(player, bounds)) { Dismiss(); return; }
             if (now >= nextSample)
             {
@@ -112,12 +124,11 @@ namespace BilibiliPotPlayer
             }
             if (!clock.Valid) { Dismiss(); return; }
             long time = (long)Math.Round(clock.Position(now));
+            Rectangle picture=PictureBounds(new Rectangle(0,0,Width,Height),catalog.DisplayRatio);
             if (revision != catalog.Revision)
             {
                 revision = catalog.Revision; DanmakuLayout.Collect(catalog, timeline); measurements.Clear();
             }
-            TextSource main = catalog.Find(catalog.Slots.Main), secondary = catalog.Find(catalog.Slots.Secondary);
-            if (!catalog.Options.SubtitlesEnabled) main = secondary = null;
             // PotPlayer raises or recreates its video child when changing fullscreen/renderers.
             // Restore our sibling order even when a paused frame needs no repaint.
             RevealBelowMenus();
@@ -136,13 +147,13 @@ namespace BilibiliPotPlayer
                         measurements[cue] = measured;
                     }
                     return measured.Width;
-                }, clock.AnimationTime(position), clock.Epoch, clock.Rate);
+                }, clock.AnimationTime(position), clock.Epoch, clock.Rate, picture,Math.Max(96,Native.GetDpiForWindow(player))/96f);
                 // libass composites all text into the same premultiplied surface.
                 // The native renderer is called after releasing GDI's bitmap lock.
                 pendingComments = comments;
             }
             if (scene == null) scene = new AssScene();
-            scene.Render(bitmap,catalog,time,pendingComments,clock.AnimationTime(time / 1000.0),clock.Epoch);
+            scene.Render(bitmap,catalog,time,pendingComments,clock.AnimationTime(time / 1000.0),clock.Epoch,picture);
             if (!Visible) Reveal(false); Present(Handle, bitmap); paintedTime = time; paintedRevision = catalog.Revision;
         }
         List<DanmakuPlacement> pendingComments;

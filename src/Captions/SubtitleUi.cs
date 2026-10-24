@@ -332,7 +332,8 @@ namespace BilibiliPotPlayer
         {
             if(previewRenderer==null) previewRenderer=new LibassRenderer();
             using(Bitmap bitmap=new Bitmap(Math.Max(1,(int)bounds.Width),Math.Max(1,(int)bounds.Height),System.Drawing.Imaging.PixelFormat.Format32bppPArgb)) {
-                string script=AssScene.Header(bitmap.Width,bitmap.Height,options)+"Dialogue: 0,0:00:00.00,1:00:00.00,"+(dm?"Danmaku":"Subtitle")+",,0,0,0,,{\\an5\\pos("+(bitmap.Width/2)+","+(bitmap.Height/2)+")\\fs"+(18*scale).ToString(System.Globalization.CultureInfo.InvariantCulture)+"}"+AssScene.Escape(text)+"\n";
+                float size=dm?25*scale*options.Size/100f:18*scale;
+                string script=AssScene.Header(bitmap.Width,bitmap.Height,options,scale)+"Dialogue: 0,0:00:00.00,1:00:00.00,"+(dm?"Danmaku":"Subtitle")+",,0,0,0,,{\\an5\\pos("+(bitmap.Width/2)+","+(bitmap.Height/2)+")\\fs"+size.ToString(System.Globalization.CultureInfo.InvariantCulture)+"}"+AssScene.Escape(text)+"\n";
                 previewRenderer.SetTrack("preview",script); previewRenderer.Render(bitmap,"preview",0); graphics.DrawImageUnscaled(bitmap,(int)bounds.Left,(int)bounds.Top);
             }
         }

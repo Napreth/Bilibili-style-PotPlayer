@@ -21,17 +21,18 @@ namespace BilibiliPotPlayer
         { long cs=(long)Math.Round(Math.Max(0,seconds)*100); return (cs/360000).ToString(CultureInfo.InvariantCulture)+":"+(cs/6000%60).ToString("00")+":"+(cs/100%60).ToString("00")+"."+(cs%100).ToString("00"); }
         static string Color(int rgb,int opacity)
         { int bgr=(rgb & 255)<<16 | rgb & 0xFF00 | (rgb>>16 & 255); return "&H"+((uint)(255-opacity*255/100)<<24 | (uint)bgr).ToString("X8",CultureInfo.InvariantCulture); }
-        internal static string Header(int width,int height,CaptionOptions options)
+        internal static string Header(int width,int height,CaptionOptions options,float dpi=1)
         {
             return "[Script Info]\nScriptType: v4.00+\nPlayResX: "+width+"\nPlayResY: "+height+"\nScaledBorderAndShadow: yes\nWrapStyle: 0\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\n"+
                 Style("Subtitle",options.SubtitleFont,options.SubtitleSize*height/1080.0,options.SubtitleColor,options.SubtitleOpacity,options.SubtitleBold,options.SubtitleItalic,options.SubtitleOutline,options.SubtitleOutlineColor,options.SubtitleBackground,options.SubtitleBackgroundColor)+
-                Style("Danmaku",options.DanmakuFont,25,options.DanmakuTextColor,options.Opacity,options.DanmakuBold,options.DanmakuItalic,options.DanmakuOutline,options.DanmakuOutlineColor,options.DanmakuBackground,options.DanmakuBackgroundColor)+
+                Style("Danmaku",options.DanmakuFont,25,options.DanmakuTextColor,options.Opacity,options.DanmakuBold,options.DanmakuItalic,options.DanmakuOutline,options.DanmakuOutlineColor,options.DanmakuBackground,options.DanmakuBackgroundColor,true,dpi)+
                 "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n";
         }
-        static string Style(string name,string font,double size,int color,int opacity,bool bold,bool italic,int outline,int outlineColor,bool background,int backgroundColor)
+        static string Style(string name,string font,double size,int color,int opacity,bool bold,bool italic,int outline,int outlineColor,bool background,int backgroundColor,bool danmaku=false,float dpi=1)
         {
-            double border=outline==3 || outline==2 ? 0 : Math.Max(1.5,size/(outline==0?8:12));
-            return "Style: "+name+","+font+","+N(size)+","+Color(color,opacity)+","+Color(color,opacity)+","+Color(background?backgroundColor:outlineColor,opacity)+","+Color(background?backgroundColor:outlineColor,background?opacity*55/100:opacity)+","+(bold?-1:0)+","+(italic?-1:0)+",0,0,100,100,0,0,"+(background?3:1)+","+N(background?Math.Max(2,border):border)+","+N(outline==2?Math.Max(1,size/12):0)+",2,0,0,0,1\n";
+            double border=outline==3 || outline==2 ? 0 : danmaku && outline==1 ? 1 : Math.Max(1.5,size/(outline==0?8:12));
+            if(danmaku) border*=dpi;
+                return "Style: "+name+","+font+","+N(size)+","+Color(color,opacity)+","+Color(color,opacity)+","+Color(background?backgroundColor:outlineColor,opacity)+","+Color(background?backgroundColor:outlineColor,background?opacity*55/100:opacity)+","+(bold?-1:0)+","+(italic?-1:0)+",0,0,100,100,0,0,"+(background?3:1)+","+N(background?Math.Max(2,border):border)+","+N(outline==2?Math.Max(1,size/12)*(danmaku?dpi:1):0)+",2,0,0,0,1\n";
         }
         void Comments(Bitmap bitmap,CaptionCatalog catalog,long time,List<DanmakuPlacement> comments,double animation,bool synchronized)
         {
@@ -43,7 +44,7 @@ namespace BilibiliPotPlayer
                 CaptionOptions appearance=p.Appearance??catalog.Options; string name="Danmaku";
                 if(p.Appearance!=null && !styles.TryGetValue(appearance,out name)) {
                     name="Live"+styles.Count; styles.Add(appearance,name);
-                    definitions.Append(Style(name,appearance.DanmakuFont,25,appearance.DanmakuTextColor,appearance.Opacity,appearance.DanmakuBold,appearance.DanmakuItalic,appearance.DanmakuOutline,appearance.DanmakuOutlineColor,appearance.DanmakuBackground,appearance.DanmakuBackgroundColor));
+                    definitions.Append(Style(name,appearance.DanmakuFont,25,appearance.DanmakuTextColor,appearance.Opacity,appearance.DanmakuBold,appearance.DanmakuItalic,appearance.DanmakuOutline,appearance.DanmakuOutlineColor,appearance.DanmakuBackground,appearance.DanmakuBackgroundColor,true,p.DpiScale));
                 }
                 events.Append("Dialogue: 0,").Append(p.Timed?Time(p.Start-origin):"0:00:00.00").Append(',').Append(p.Timed?Time(p.Start+p.Life-origin):"1:00:00.00").Append(',').Append(name).Append(",,0,0,0,,{\\an7\\q2\\clip(0,0,").Append(bitmap.Width).Append(',').Append(p.Appearance!=null?p.ClipHeight:DanmakuLayout.AreaHeight(bitmap.Height,appearance)).Append(')');
                 if(p.Timed && p.FromX!=p.ToX) events.Append("\\move(").Append(N(p.FromX)).Append(',').Append(N(p.Y)).Append(',').Append(N(p.ToX)).Append(',').Append(N(p.Y)).Append(')');
@@ -92,18 +93,20 @@ namespace BilibiliPotPlayer
                 catch(InvalidOperationException error) { catalog.Status=error.Message; }
             }
         }
-        internal bool Render(Bitmap bitmap,CaptionCatalog catalog,long time,List<DanmakuPlacement> comments,double? commentTime=null,int? clockEpoch=null)
+        internal bool Render(Bitmap bitmap,CaptionCatalog catalog,long time,List<DanmakuPlacement> comments,double? commentTime=null,int? clockEpoch=null,Rectangle? pictureBounds=null)
         {
             using(Graphics clear=Graphics.FromImage(bitmap)) clear.Clear(System.Drawing.Color.Transparent);
             Update(catalog,time,clockEpoch);
-            foreach(string key in keys) renderer.Render(bitmap,key,time);
+            Rectangle picture=Rectangle.Intersect(new Rectangle(0,0,bitmap.Width,bitmap.Height),pictureBounds??new Rectangle(0,0,bitmap.Width,bitmap.Height));
+            if(picture.Width<=0 || picture.Height<=0) picture=Rectangle.Empty;
+            foreach(string key in keys) renderer.Render(bitmap,key,time,100,picture);
             Comments(bitmap,catalog,time,comments,commentTime??time/1000.0,false);
             Comments(bitmap,catalog,time,comments,commentTime??time/1000.0,true);
-            StringBuilder frame=new StringBuilder(Header(bitmap.Width,bitmap.Height,catalog.Options));
+            StringBuilder frame=new StringBuilder(Header(picture.Width,picture.Height,catalog.Options));
             TextSource main=catalog.Find(catalog.Slots.Main), second=catalog.Find(catalog.Slots.Secondary);
-            double bottom=bitmap.Height*(1-catalog.Options.SubtitleBottom/100.0);
-            if(catalog.Options.SubtitlesEnabled) { bottom=PlainCaption(frame,second,time/1000.0,bitmap.Width,bitmap.Height,bottom,.9,catalog.Options); PlainCaption(frame,main,time/1000.0,bitmap.Width,bitmap.Height,bottom,1,catalog.Options); }
-            renderer.SetTrack("frame",frame.ToString()); renderer.Render(bitmap,"frame",0);
+            double bottom=picture.Height*(1-catalog.Options.SubtitleBottom/100.0);
+            if(catalog.Options.SubtitlesEnabled && !picture.IsEmpty) { bottom=PlainCaption(frame,second,time/1000.0,picture.Width,picture.Height,bottom,.9,catalog.Options); PlainCaption(frame,main,time/1000.0,picture.Width,picture.Height,bottom,1,catalog.Options); }
+            if(!picture.IsEmpty) { renderer.SetTrack("frame",frame.ToString()); renderer.Render(bitmap,"frame",0,100,picture); }
             return keys.Count>0 || comments.Count>0 || main!=null || second!=null;
         }
         static double PlainCaption(StringBuilder frame,TextSource source,double time,int width,int height,double bottom,double ratio,CaptionOptions options)

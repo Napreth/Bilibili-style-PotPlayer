@@ -56,11 +56,13 @@ namespace BilibiliPotPlayer
         }
         internal void AddFonts(IEnumerable<AssFont> entries)
         { foreach(AssFont font in entries) if(fonts.Add(font.Key)) bili_ass_add_font(context,Encoding.UTF8.GetBytes(font.Name+"\0"),font.Data,font.Data.Length); }
-        internal int Render(Bitmap target,string key,long time,int opacity=100)
+        internal int Render(Bitmap target,string key,long time,int opacity=100,Rectangle? viewport=null)
         {
             IntPtr track; if(!tracks.TryGetValue(key,out track)) return 0;
-            BitmapData data=target.LockBits(new Rectangle(0,0,target.Width,target.Height),ImageLockMode.ReadWrite,PixelFormat.Format32bppPArgb);
-            try { return bili_ass_render(context,track,time,target.Width,target.Height,data.Stride,data.Scan0,opacity); }
+            Rectangle bounds=Rectangle.Intersect(new Rectangle(0,0,target.Width,target.Height),viewport??new Rectangle(0,0,target.Width,target.Height));
+            if(bounds.Width<=0 || bounds.Height<=0) return 0;
+            BitmapData data=target.LockBits(bounds,ImageLockMode.ReadWrite,PixelFormat.Format32bppPArgb);
+            try { return bili_ass_render(context,track,time,bounds.Width,bounds.Height,data.Stride,data.Scan0,opacity); }
             finally { target.UnlockBits(data); }
         }
         public void Dispose() { Clear(); if(context!=IntPtr.Zero) { bili_ass_destroy(context); context=IntPtr.Zero; } }

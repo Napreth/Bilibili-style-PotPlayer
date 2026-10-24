@@ -47,7 +47,7 @@ internal static class DanmakuRenderingChecks
                 catalog.Sources.Add(source); catalog.Revision++;
                 var cues=new List<TextCue>(); DanmakuLayout.Collect(catalog,cues);
                 check(source.Category==TextCategory.Danmaku && cues.Count==12,"ordinary "+names[format]+" reaches the configurable layout");
-                options.Region=10; options.Opacity=100; options.Colored=options.Fixed=options.Scrolling=options.UseDanmakuColor=true; options.DanmakuUniformColor=false; options.ScaleWithScreen=true; options.Size=options.Speed=100;
+                options.Region=10; options.Opacity=100; options.Colored=options.Fixed=options.Scrolling=options.UseDanmakuColor=true; options.DanmakuUniformColor=false; options.ScaleWithScreen=false; options.Size=options.Speed=100;
                 List<DanmakuPlacement> small=DanmakuTestFrames.At(cues,1,320,180,options,(cue,size)=>80);
                 scene.Render(bitmap,catalog,1000,small); Rectangle narrow=Ink(bitmap);
                 check(!narrow.IsEmpty && narrow.Bottom<=18,"ten-percent region clips actual "+names[format]+" glyphs to the selected band");
@@ -75,8 +75,8 @@ internal static class DanmakuRenderingChecks
                 check(DanmakuTestFrames.At(cues,1,320,90,options,(cue,size)=>80)[0].Size<larger,"scale-with-screen setting affects "+names[format]+" layout");
                 if(format==0)
                 {
-                    options.Size=100;
-                    check(DanmakuTestFrames.At(cues,1,320,180,options,(cue,size)=>80)[0].Size==25,"ordinary ASS retains its authored font-size scale at the original canvas height");
+                    options.Size=100; options.ScaleWithScreen=false;
+                    check(DanmakuTestFrames.At(cues,1,320,180,options,(cue,size)=>80)[0].Size==25,"ordinary ASS uses the web-size baseline independently of the author's canvas height");
                     options.Size=170;
                 }
                 options.Region=10; options.ScaleWithScreen=false;

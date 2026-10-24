@@ -18,6 +18,7 @@ namespace BilibiliPotPlayer
         internal int Layer, Alignment, AssOrder;
         internal double X, Y;
         internal double CanvasHeight = 1080;
+        internal double DanmakuBaseSize = 25;
         internal bool PositionKnown, DurationInferred;
         internal CueMotion Motion;
         internal CueEffects Effects;

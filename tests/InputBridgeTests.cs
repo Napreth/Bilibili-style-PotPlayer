@@ -36,6 +36,7 @@ internal static class BridgeTests
         if (args.Length > 0 && args[0] == "--status") { Status(); return 0; }
         if (args.Length > 1 && args[0] == "--timing-probe") { PlaybackClockChecks.Sample(args[1]); return 0; }
         if (args.Length > 0 && args[0] == "--ui-status") { UiStatus(); return 0; }
+        if (args.Length > 0 && args[0] == "--font-probe") { DanmakuFontChecks.Probe(); return 0; }
         if (args.Length > 1 && args[0] == "--caption-preview") { CaptionPreview(args[1]); return 0; }
         if (args.Length > 1 && args[0] == "--classify-caption") {
             foreach (TextSource source in TimedText.Read(args[1])) Console.WriteLine(new JavaScriptSerializer().Serialize(new { source.Title, Category=source.Category.ToString(), Events=source.Events.Count, Playable=source.Cues.Count, source.Analysis }));
@@ -228,6 +229,8 @@ internal static class BridgeTests
         PlaybackClockChecks.Run(Equal<bool>);
         DanmakuRenderingChecks.Run(Equal<bool>);
         DanmakuPlaybackChecks.Run(Equal<bool>);
+        DanmakuViewportChecks.Run(Equal<bool>);
+        DanmakuFontChecks.Run(Equal<bool>);
         DanmakuFactoryChecks.Run(Equal<bool>);
         Console.WriteLine("PASS: " + checks + " input and metadata checks");
         return 0;
