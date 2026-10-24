@@ -33,52 +33,30 @@ namespace BilibiliPotPlayer
 
     }
     internal sealed class DanmakuPlacement
-    { internal TextCue Cue; internal float X, Y, Size, Width; }
+    {
+        internal TextCue Cue;
+        internal float X, Y, Size, Width, FromX, ToX;
+        internal double Start, Life;
+        internal bool Timed;
+        internal CaptionOptions Appearance;
+        internal int CanvasWidth, CanvasHeight, ClipHeight;
+    }
     internal static class DanmakuLayout
     {
-        sealed class Lease { internal TextCue Cue; internal float Width, Velocity; internal double End; }
-        internal static List<DanmakuPlacement> Frame(List<TextCue> timeline, double position, int width, int height, CaptionOptions options, Func<TextCue, float, float> measure, double playbackRate = 1)
+        internal static bool UsesLayout(TextSource source)
+        { return source.Category == TextCategory.Danmaku && source.Enabled && !source.Bitmap && !source.IntrinsicAdvanced && !source.ProtocolAdvanced; }
+        internal static void Collect(CaptionCatalog catalog, List<TextCue> timeline)
         {
-            List<DanmakuPlacement> result = new List<DanmakuPlacement>();
-            if (!options.DanmakuEnabled || width <= 0 || height <= 0) return result;
-            double duration = 8.0 * 100 / options.Speed * (options.DanmakuSpeedSync ? 1 : Math.Max(0.1, Math.Min(10, playbackRate)));
-            float scale = options.ScaleWithScreen ? height / 1080f : 1;
-            float lineHeight = Math.Max(22, 34 * scale * options.Size / 100f);
-            int availableHeight = height * options.Region / 100;
-            if (options.AvoidSubtitles) availableHeight = Math.Min(availableHeight, height - (int)(height * options.SubtitleBottom / 100f + options.SubtitleSize * height / 1080f * 4 + 16));
-            int lanes = Math.Max(1, Math.Min(100, (int)(availableHeight / lineHeight)));
-            // All types share lanes, so fixed comments also stay clear of scrolling text.
-            Lease[] occupied = new Lease[lanes];
-            int start = LowerBound(timeline, position - duration * 2);
-            for (int i = start; i < timeline.Count && timeline[i].Start <= position; i++)
-            {
-                TextCue cue = timeline[i]; bool fixedCue = cue.Mode == 4 || cue.Mode == 5;
-                if (fixedCue && !options.Fixed || !fixedCue && !options.Scrolling || cue.Color != 0xFFFFFF && !options.Colored || cue.Mode >= 7) continue;
-                float size = Math.Max(12, cue.Size * scale * options.Size / 100f), textWidth = measure(cue, size), velocity = (width + textWidth) / (float)duration;
-                double life = fixedCue ? Math.Min(5, duration) : duration;
-                int span = Math.Max(1, (int)Math.Ceiling(size * 1.4f / lineHeight)), lane = -1;
-                for (int candidate = 0; candidate + span <= lanes; candidate++)
-                {
-                    int n = cue.Mode == 4 ? lanes - candidate - span : candidate; bool free = true;
-                    for (int row = n; row < n + span; row++)
-                    {
-                        Lease previous = occupied[row];
-                        if (previous == null || previous.End <= cue.Start) continue;
-                        float gap = (float)(cue.Start - previous.Cue.Start) * previous.Velocity - previous.Width - 12;
-                        if (!fixedCue && previous.Cue.Mode == cue.Mode && gap >= 0 && (velocity <= previous.Velocity || (velocity - previous.Velocity) * (previous.End - cue.Start) < gap)) continue;
-                        free = false; break;
-                    }
-                    if (free) { lane = n; break; }
-                }
-                if (lane < 0) continue;
-                Lease lease = new Lease { Cue = cue, Width = textWidth, Velocity = velocity, End = cue.Start + life };
-                for (int row = lane; row < lane + span; row++) occupied[row] = lease;
-                if (position >= cue.Start + life || result.Count >= 72) continue;
-                float x = fixedCue ? (width - textWidth) / 2 : cue.Mode == 6 ? -textWidth + (float)(position - cue.Start) * velocity : width - (float)(position - cue.Start) * velocity;
-                float y = lane * lineHeight;
-                result.Add(new DanmakuPlacement { Cue = cue, X = x, Y = y, Size = size, Width = textWidth });
-            }
-            return result;
+            timeline.Clear();
+            foreach (TextSource source in catalog.Sources) if (UsesLayout(source))
+                foreach (TextCue cue in source.Cues) if (cue.Mode < 7 && (cue.Effects & (CueEffects.Animation | CueEffects.Drawing | CueEffects.Protocol)) == 0) timeline.Add(cue);
+            TimedText.Sort(timeline);
+        }
+        internal static int AreaHeight(int height, CaptionOptions options)
+        {
+            int available = height * options.Region / 100;
+            if (options.AvoidSubtitles && options.SubtitlesEnabled) available = Math.Min(available, height - (int)(height * options.SubtitleBottom / 100f + options.SubtitleSize * height / 1080f * 4 + 16));
+            return Math.Max(0, Math.Min(height, available));
         }
         internal static int LowerBound(List<TextCue> cues, double time)
         { int low = 0, high = cues.Count; while (low < high) { int middle = (low + high) / 2; if (cues[middle].Start < time) low = middle + 1; else high = middle; } return low; }
@@ -95,8 +73,13 @@ namespace BilibiliPotPlayer
     {
         readonly CaptionCatalog catalog;
         readonly List<TextCue> timeline = new List<TextCue>();
+        readonly PlaybackClock clock = new PlaybackClock();
+        readonly DanmakuPlayback playback = new DanmakuPlayback();
+        sealed class Measurement { internal float Size, Width; }
+        readonly Dictionary<TextCue, Measurement> measurements = new Dictionary<TextCue, Measurement>();
+        string mediaPath;
         int revision = -1;
-        long nextFrame;
+        long nextFrame, nextSample;
         long paintedTime = -1;
         int paintedRevision = -1;
         Bitmap bitmap;
@@ -114,38 +97,52 @@ namespace BilibiliPotPlayer
         protected override void OnPaintBackground(PaintEventArgs e) { }
         internal void Update(IntPtr player, long now)
         {
-            if (now < nextFrame) return; nextFrame = now + 33;
+            if (now < nextFrame) return; nextFrame = now + 10;
+            if (mediaPath != catalog.MediaPath) { mediaPath = catalog.MediaPath; clock.Reset(); playback.Reset(); nextSample = 0; }
             if (Native.IsIconic(player) || !Native.IsWindowVisible(player)) { Dismiss(); return; }
             IntPtr video = Native.VideoSurface(player); Rectangle bounds = PictureBounds(Native.ClientBounds(video),catalog.DisplayRatio);
             if (bounds.IsEmpty || !PlaceInPlayer(player, bounds)) { Dismiss(); return; }
-            long time, status; if (!Native.Get(player, Native.GetPosition, out time) || !Native.Get(player, Native.GetPlayStatus, out status) || status == 0) { Dismiss(); return; }
+            if (now >= nextSample)
+            {
+                nextSample = now + 30;
+                long sample, status, speed;
+                if (!Native.Get(player, Native.GetPosition, out sample) || !Native.Get(player, Native.GetPlayStatus, out status) || status == 0) { clock.Reset(); Dismiss(); return; }
+                Native.Get(player, Native.GetSpeed, out speed);
+                clock.Observe(sample, (int)status, speed > 0 ? speed / 1000.0 : clock.Rate, now);
+            }
+            if (!clock.Valid) { Dismiss(); return; }
+            long time = (long)Math.Round(clock.Position(now));
             if (revision != catalog.Revision)
             {
-                revision = catalog.Revision; timeline.Clear();
-                foreach (TextSource source in catalog.Sources) if (source.Category == TextCategory.Danmaku && source.Enabled && !source.IntrinsicAdvanced && !source.AssRenderable) timeline.AddRange(source.Cues);
-                TimedText.Sort(timeline);
+                revision = catalog.Revision; DanmakuLayout.Collect(catalog, timeline); measurements.Clear();
             }
             TextSource main = catalog.Find(catalog.Slots.Main), secondary = catalog.Find(catalog.Slots.Secondary);
             if (!catalog.Options.SubtitlesEnabled) main = secondary = null;
-            if ((main == null || main.Bitmap || main.Cues.Count == 0) && (secondary == null || secondary.Cues.Count == 0) && (!catalog.Options.DanmakuEnabled || timeline.Count == 0) && !catalog.Sources.Exists(s => AssScene.Enabled(s,catalog))) { Dismiss(); return; }
             // PotPlayer raises or recreates its video child when changing fullscreen/renderers.
             // Restore our sibling order even when a paused frame needs no repaint.
             RevealBelowMenus();
             if (Visible && bitmap != null && bitmap.Width == Width && bitmap.Height == Height && paintedTime == time && paintedRevision == catalog.Revision) return;
-            if (bitmap == null || bitmap.Width != Width || bitmap.Height != Height) { if (bitmap != null) bitmap.Dispose(); bitmap = new Bitmap(Math.Max(1, Width), Math.Max(1, Height), PixelFormat.Format32bppPArgb); }
+            if (bitmap == null || bitmap.Width != Width || bitmap.Height != Height) { if (bitmap != null) bitmap.Dispose(); bitmap = new Bitmap(Math.Max(1, Width), Math.Max(1, Height), PixelFormat.Format32bppPArgb); measurements.Clear(); }
             using (Graphics graphics = Graphics.FromImage(bitmap))
             {
                 graphics.Clear(Color.Transparent); graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 double position = time / 1000.0;
-                long nativeSpeed; Native.Get(player, Native.GetSpeed, out nativeSpeed);
-                List<DanmakuPlacement> comments = DanmakuLayout.Frame(timeline, position, Width, Height, catalog.Options, delegate(TextCue cue, float size)
-                { using (Font font = DanmakuSettings.FontFor(size, catalog.Options)) return graphics.MeasureString(cue.Text.Replace('\n', ' '), font).Width; }, nativeSpeed > 0 ? nativeSpeed / 1000.0 : 1);
+                List<DanmakuPlacement> comments = playback.Frame(timeline, position, Width, Height, catalog.Options, delegate(TextCue cue, float size, CaptionOptions appearance)
+                {
+                    Measurement measured;
+                    if (!measurements.TryGetValue(cue, out measured) || measured.Size != size)
+                    {
+                        using (Font font = DanmakuSettings.FontFor(size, appearance)) measured = new Measurement { Size = size, Width = graphics.MeasureString(cue.Text.Replace('\n', ' '), font).Width };
+                        measurements[cue] = measured;
+                    }
+                    return measured.Width;
+                }, clock.AnimationTime(position), clock.Epoch, clock.Rate);
                 // libass composites all text into the same premultiplied surface.
                 // The native renderer is called after releasing GDI's bitmap lock.
                 pendingComments = comments;
             }
             if (scene == null) scene = new AssScene();
-            scene.Render(bitmap,catalog,time,pendingComments);
+            scene.Render(bitmap,catalog,time,pendingComments,clock.AnimationTime(time / 1000.0),clock.Epoch);
             if (!Visible) Reveal(false); Present(Handle, bitmap); paintedTime = time; paintedRevision = catalog.Revision;
         }
         List<DanmakuPlacement> pendingComments;

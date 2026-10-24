@@ -25,12 +25,15 @@ namespace BilibiliPotPlayer
         internal static int Version { get { return bili_ass_version(); } }
         IntPtr context;
         readonly Dictionary<string,IntPtr> tracks = new Dictionary<string,IntPtr>();
+        readonly Dictionary<string,string> scripts = new Dictionary<string,string>();
         readonly HashSet<string> fonts = new HashSet<string>(), fontSections = new HashSet<string>();
         internal LibassRenderer() { context=bili_ass_create(); if(context==IntPtr.Zero) throw new InvalidOperationException("libass 初始化失败"); }
         internal void Clear()
-        { foreach(IntPtr track in tracks.Values) bili_ass_free_track(track); tracks.Clear(); }
+        { foreach(IntPtr track in tracks.Values) bili_ass_free_track(track); tracks.Clear(); scripts.Clear(); }
         internal void SetTrack(string key,string script)
         {
+            string cached; if(scripts.TryGetValue(key,out cached) && cached==script) return;
+            string original=script; scripts.Remove(key);
             IntPtr old; if(tracks.TryGetValue(key,out old)) { bili_ass_free_track(old); tracks.Remove(key); }
             int start=-1,end=script.Length;
             for(int row=0;row<script.Length;) {
@@ -49,6 +52,7 @@ namespace BilibiliPotPlayer
             IntPtr track=bili_ass_read(context,data,data.Length);
             if(track==IntPtr.Zero) throw new InvalidOperationException("libass 无法读取字幕");
             tracks.Add(key,track);
+            scripts.Add(key,original);
         }
         internal void AddFonts(IEnumerable<AssFont> entries)
         { foreach(AssFont font in entries) if(fonts.Add(font.Key)) bili_ass_add_font(context,Encoding.UTF8.GetBytes(font.Name+"\0"),font.Data,font.Data.Length); }

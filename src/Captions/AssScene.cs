@@ -12,6 +12,7 @@ namespace BilibiliPotPlayer
         LibassRenderer renderer;
         string mediaPath;
         readonly List<string> keys = new List<string>();
+        readonly AdvancedDanmakuPlayback advanced = new AdvancedDanmakuPlayback();
         int revision = -1;
         internal static string Escape(string text)
         { return text.Replace("\\","＼").Replace("{","｛").Replace("}","｝").Replace("\r","").Replace("\n","\\N"); }
@@ -32,6 +33,27 @@ namespace BilibiliPotPlayer
             double border=outline==3 || outline==2 ? 0 : Math.Max(1.5,size/(outline==0?8:12));
             return "Style: "+name+","+font+","+N(size)+","+Color(color,opacity)+","+Color(color,opacity)+","+Color(background?backgroundColor:outlineColor,opacity)+","+Color(background?backgroundColor:outlineColor,background?opacity*55/100:opacity)+","+(bold?-1:0)+","+(italic?-1:0)+",0,0,100,100,0,0,"+(background?3:1)+","+N(background?Math.Max(2,border):border)+","+N(outline==2?Math.Max(1,size/12):0)+",2,0,0,0,1\n";
         }
+        void Comments(Bitmap bitmap,CaptionCatalog catalog,long time,List<DanmakuPlacement> comments,double animation,bool synchronized)
+        {
+            double drawingTime=synchronized?time/1000.0:animation, origin=Math.Floor((drawingTime-60)/60)*60;
+            var styles=new Dictionary<CaptionOptions,string>(); StringBuilder definitions=new StringBuilder(), events=new StringBuilder();
+            foreach(DanmakuPlacement p in comments) {
+                if(!catalog.Options.DanmakuEnabled || p.Cue.Mode>=7 || (p.Cue.Effects & CueEffects.Protocol)!=0) continue;
+                if((p.Appearance!=null && p.Appearance.DanmakuSpeedSync)!=synchronized) continue;
+                CaptionOptions appearance=p.Appearance??catalog.Options; string name="Danmaku";
+                if(p.Appearance!=null && !styles.TryGetValue(appearance,out name)) {
+                    name="Live"+styles.Count; styles.Add(appearance,name);
+                    definitions.Append(Style(name,appearance.DanmakuFont,25,appearance.DanmakuTextColor,appearance.Opacity,appearance.DanmakuBold,appearance.DanmakuItalic,appearance.DanmakuOutline,appearance.DanmakuOutlineColor,appearance.DanmakuBackground,appearance.DanmakuBackgroundColor));
+                }
+                events.Append("Dialogue: 0,").Append(p.Timed?Time(p.Start-origin):"0:00:00.00").Append(',').Append(p.Timed?Time(p.Start+p.Life-origin):"1:00:00.00").Append(',').Append(name).Append(",,0,0,0,,{\\an7\\q2\\clip(0,0,").Append(bitmap.Width).Append(',').Append(p.Appearance!=null?p.ClipHeight:DanmakuLayout.AreaHeight(bitmap.Height,appearance)).Append(')');
+                if(p.Timed && p.FromX!=p.ToX) events.Append("\\move(").Append(N(p.FromX)).Append(',').Append(N(p.Y)).Append(',').Append(N(p.ToX)).Append(',').Append(N(p.Y)).Append(')');
+                else events.Append("\\pos(").Append(N(p.X)).Append(',').Append(N(p.Y)).Append(')');
+                events.Append("\\fs").Append(N(p.Size)).Append("\\1c").Append(Color(DanmakuSettings.ColorFor(p.Cue,appearance),appearance.Opacity)).Append('}').Append(Escape(p.Cue.Text.Replace('\n',' '))).Append('\n');
+            }
+            string key=synchronized?"comments-media":"comments-animation";
+            string header=Header(bitmap.Width,bitmap.Height,catalog.Options).Replace("[Events]\n",definitions+"[Events]\n");
+            renderer.SetTrack(key,header+events); renderer.Render(bitmap,key,(long)Math.Round((drawingTime-origin)*1000));
+        }
         internal static string Script(TextSource source,IEnumerable<TextCue> events)
         {
             StringBuilder script=new StringBuilder(source.AssHeader);
@@ -46,36 +68,38 @@ namespace BilibiliPotPlayer
         {
             if(source.Bitmap || !source.AssRenderable) return false;
             if(source.Category==TextCategory.Subtitle) return catalog.Options.SubtitlesEnabled && (source.Id==catalog.Slots.Main || source.Id==catalog.Slots.Secondary);
-            if(source.Category==TextCategory.Danmaku) return source.Enabled && catalog.Options.DanmakuEnabled;
+            // Ordinary ASS comments use the same layout and style settings as XML/JSON.
+            if(source.Category==TextCategory.Danmaku) return false;
             return source.Category==TextCategory.Advanced && source.Enabled && catalog.Options.AssEffectsEnabled;
         }
         internal static bool Filter(TextCue cue,CaptionOptions options)
         { return (cue.Mode==4 || cue.Mode==5 ? options.Fixed : options.Scrolling) && (cue.Color==0xFFFFFF || options.Colored); }
-        void Update(CaptionCatalog catalog)
+        void Update(CaptionCatalog catalog,long time,int? clockEpoch)
         {
-            if(revision==catalog.Revision) return;
-            if(renderer==null || mediaPath!=catalog.MediaPath) { if(renderer!=null) renderer.Dispose(); renderer=new LibassRenderer(); mediaPath=catalog.MediaPath; }
+            if(renderer==null || mediaPath!=catalog.MediaPath) { if(renderer!=null) renderer.Dispose(); renderer=new LibassRenderer(); mediaPath=catalog.MediaPath; advanced.Reset(); revision=-1; }
+            bool changed=clockEpoch.HasValue && advanced.Advance(catalog,time/1000.0,clockEpoch.Value);
+            if(revision==catalog.Revision && !changed) return;
             revision=catalog.Revision; renderer.Clear(); keys.Clear();
-            var groups=catalog.Sources.Where(s=>Enabled(s,catalog)).GroupBy(s=>(s.Path??s.Title)+":"+s.Stream+":"+s.AssHeader);
+            foreach(TextSource source in catalog.Sources) if(DanmakuLayout.UsesLayout(source)) renderer.AddFonts(source.Fonts);
+            var sources=clockEpoch.HasValue ? catalog.Sources.Where(s=>s.Category==TextCategory.Subtitle && Enabled(s,catalog)).Concat(advanced.Active.Select(e=>e.Source)).Distinct() : catalog.Sources.Where(s=>Enabled(s,catalog));
+            var groups=sources.GroupBy(s=>(s.Path??s.Title)+":"+s.Stream+":"+s.AssHeader);
             foreach(var group in groups) {
                 foreach(TextSource source in group) renderer.AddFonts(source.Fonts);
                 List<TextCue> events=new List<TextCue>();
-                foreach(TextSource source in group) events.AddRange(source.Events.Where(c=>source.Category!=TextCategory.Danmaku || Filter(c,catalog.Options)));
+                foreach(TextSource source in group) events.AddRange(clockEpoch.HasValue && advanced.Active.Any(e=>e.Source==source) ? advanced.Active.Where(e=>e.Source==source).Select(e=>e.Cue) : source.Events);
                 string key="source-"+keys.Count;
                 try { renderer.SetTrack(key,Script(group.First(),events)); keys.Add(key); }
                 catch(InvalidOperationException error) { catalog.Status=error.Message; }
             }
         }
-        internal bool Render(Bitmap bitmap,CaptionCatalog catalog,long time,List<DanmakuPlacement> comments)
+        internal bool Render(Bitmap bitmap,CaptionCatalog catalog,long time,List<DanmakuPlacement> comments,double? commentTime=null,int? clockEpoch=null)
         {
             using(Graphics clear=Graphics.FromImage(bitmap)) clear.Clear(System.Drawing.Color.Transparent);
-            Update(catalog);
+            Update(catalog,time,clockEpoch);
             foreach(string key in keys) renderer.Render(bitmap,key,time);
+            Comments(bitmap,catalog,time,comments,commentTime??time/1000.0,false);
+            Comments(bitmap,catalog,time,comments,commentTime??time/1000.0,true);
             StringBuilder frame=new StringBuilder(Header(bitmap.Width,bitmap.Height,catalog.Options));
-            foreach(DanmakuPlacement p in comments) {
-                if(!catalog.Options.DanmakuEnabled || p.Cue.Mode>=7 || (p.Cue.Effects & CueEffects.Protocol)!=0) continue;
-                frame.Append("Dialogue: 0,0:00:00.00,1:00:00.00,Danmaku,,0,0,0,,{\\an7\\pos(").Append(N(p.X)).Append(',').Append(N(p.Y)).Append(")\\fs").Append(N(p.Size)).Append("\\1c").Append(Color(DanmakuSettings.ColorFor(p.Cue,catalog.Options),catalog.Options.Opacity)).Append('}').Append(Escape(p.Cue.Text.Replace('\n',' '))).Append('\n');
-            }
             TextSource main=catalog.Find(catalog.Slots.Main), second=catalog.Find(catalog.Slots.Secondary);
             double bottom=bitmap.Height*(1-catalog.Options.SubtitleBottom/100.0);
             if(catalog.Options.SubtitlesEnabled) { bottom=PlainCaption(frame,second,time/1000.0,bitmap.Width,bitmap.Height,bottom,.9,catalog.Options); PlainCaption(frame,main,time/1000.0,bitmap.Width,bitmap.Height,bottom,1,catalog.Options); }

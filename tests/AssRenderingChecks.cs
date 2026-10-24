@@ -105,6 +105,7 @@ internal static class AssRenderingChecks
                 check(Bounds(bitmap).IsEmpty,"advanced filter clears the scene without enabling any Bilibili protocol");
                 catalog.Options.AssEffectsEnabled=true; parsed.Enabled=false; catalog.Revision++; scene.Render(bitmap,catalog,1000,new List<DanmakuPlacement>());
                 check(Bounds(bitmap).IsEmpty,"per-source advanced off switch removes its pixels");
+                catalog.Options.Region=100; catalog.Options.AvoidSubtitles=false;
                 var comment=new TextCue { Text=@"literal {\p1} and \N [Fonts] text",Mode=1 };
                 var comments=new List<DanmakuPlacement> { new DanmakuPlacement { Cue=comment,X=10,Y=30,Size=25,Width=250 } };
                 scene.Render(bitmap,catalog,1000,comments); check(!Bounds(bitmap).IsEmpty && !AssScene.Escape(comment.Text).Contains("\\p1"),"ordinary comments render as literal text through libass");

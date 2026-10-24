@@ -17,6 +17,7 @@ namespace BilibiliPotPlayer
         internal string AssFields = "";
         internal int Layer, Alignment, AssOrder;
         internal double X, Y;
+        internal double CanvasHeight = 1080;
         internal bool PositionKnown, DurationInferred;
         internal CueMotion Motion;
         internal CueEffects Effects;

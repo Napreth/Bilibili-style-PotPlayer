@@ -16,6 +16,11 @@ $modules = [ordered]@{
     Playback = @('Contracts','Platform','Media')
     Runtime = @('Contracts','Platform','Input','Windowing','Media','Captions','Playback')
 }
+# Branch switches can leave assemblies from modules absent in the current graph.
+# Never let package.ps1 silently redistribute those stale DLLs.
+$moduleFiles = @($modules.Keys | ForEach-Object { "BilibiliBehaviors.$_.dll" })
+Get-ChildItem -LiteralPath $output -Filter 'BilibiliBehaviors.*.dll' -File |
+    Where-Object { $_.Name -notin $moduleFiles } | ForEach-Object { Remove-Item -LiteralPath $_.FullName }
 $version = (Get-Content (Join-Path $PSScriptRoot 'version.txt') -Raw).Trim()
 foreach ($module in $modules.Keys) {
     $friends = @('BilibiliBehaviors.Tests')

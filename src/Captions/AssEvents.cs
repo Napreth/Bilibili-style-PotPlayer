@@ -158,6 +158,7 @@ namespace BilibiliPotPlayer
             }
             if (cue.RawContent.IndexOf('{') >= 0 && !Regex.IsMatch(cue.RawContent,@"^(?:[^{}]|\{[^{}]*\})*$",RegexOptions.None,TimeSpan.FromMilliseconds(200))) cue.Effects |= CueEffects.Unparsed;
             cue.Size = (int)state["fs"]; int bgr = (int)state["1c"]; cue.Color = (bgr & 255)<<16 | bgr & 0xFF00 | bgr>>16;
+            if (h > 0) cue.CanvasHeight = h;
             if (!positioned && cue.Alignment >= 1 && cue.Alignment <= 9 && w > 0 && h > 0) {
                 int col = (cue.Alignment-1)%3, row = (cue.Alignment-1)/3;
                 x = col == 0 ? (ml > 0 ? ml : style.MarginL) : col == 2 ? w-(mr > 0 ? mr : style.MarginR) : w/2;

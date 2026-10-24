@@ -27,6 +27,7 @@ namespace BilibiliPotPlayer
         public bool SubtitleBold, SubtitleItalic, DanmakuItalic, DanmakuUniformColor, DanmakuBackground;
         public int SubtitleOutline = 1, SubtitleOutlineColor, SubtitleBackgroundColor;
         public int DanmakuTextColor = 0xFFFFFF, DanmakuOutlineColor, DanmakuBackgroundColor;
+        internal CaptionOptions Snapshot() { return (CaptionOptions)MemberwiseClone(); }
         internal void ResetDanmaku()
         { DanmakuEnabled = AssEffectsEnabled = Scrolling = Fixed = Colored = AvoidSubtitles = ScaleWithScreen = UseDanmakuColor = DanmakuBold = true; Region = 10; Opacity = 80; Size = Speed = 100; DanmakuSpeedSync = false; DanmakuFont = "SimHei"; DanmakuOutline = 0; DanmakuItalic = DanmakuUniformColor = DanmakuBackground = false; DanmakuTextColor = 0xFFFFFF; DanmakuOutlineColor = DanmakuBackgroundColor = 0; }
 

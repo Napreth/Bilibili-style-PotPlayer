@@ -34,6 +34,7 @@ internal static class BridgeTests
         if (args.Length > 0 && args[0] == "--sidebar-tab-check") { WindowModeChecks.CheckSidebarTabs(); return 0; }
         if (args.Length > 0 && args[0] == "--layout-check") { WindowModeChecks.Run(); return 0; }
         if (args.Length > 0 && args[0] == "--status") { Status(); return 0; }
+        if (args.Length > 1 && args[0] == "--timing-probe") { PlaybackClockChecks.Sample(args[1]); return 0; }
         if (args.Length > 0 && args[0] == "--ui-status") { UiStatus(); return 0; }
         if (args.Length > 1 && args[0] == "--caption-preview") { CaptionPreview(args[1]); return 0; }
         if (args.Length > 1 && args[0] == "--classify-caption") {
@@ -224,6 +225,9 @@ internal static class BridgeTests
         ModuleChecks.Run(Equal<bool>);
         NativeTimedTextChecks.Run(Equal<bool>);
         AssRenderingChecks.Run(Equal<bool>);
+        PlaybackClockChecks.Run(Equal<bool>);
+        DanmakuRenderingChecks.Run(Equal<bool>);
+        DanmakuPlaybackChecks.Run(Equal<bool>);
         DanmakuFactoryChecks.Run(Equal<bool>);
         Console.WriteLine("PASS: " + checks + " input and metadata checks");
         return 0;
